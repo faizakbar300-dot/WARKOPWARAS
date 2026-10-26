@@ -92,7 +92,7 @@ label.f{display:grid;gap:5px;font-size:13px;font-weight:600;color:var(--muted);m
 .pos-menu{display:grid;gap:14px;align-content:start;min-width:0}
 .tools{display:grid;gap:10px}
 .grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
-.item{position:relative;display:grid;grid-template-rows:auto 1fr;text-align:left;padding:0;overflow:hidden;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink)}
+.item{position:relative;display:grid;grid-template-rows:auto;text-align:left;padding:0;overflow:hidden;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink)}
 .item:active{background:var(--surface2)}
 .it-b{display:grid;gap:2px;padding:10px 12px;align-content:start}
 .item .nm{font-weight:600;line-height:1.25}
@@ -404,6 +404,20 @@ h1,h2,h3{font-weight:700}
   body{padding-bottom:200px}
   .toast{bottom:calc(210px + env(safe-area-inset-bottom,0px))}
 }
+
+/* Tampilan menu tanpa gambar: daftar nama, varian dan harga */
+.ph,.photo,.filebtn{display:none!important}
+.grid{display:flex;flex-direction:column;gap:0}
+.item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:0;border-bottom:1px solid var(--line);border-radius:0;min-height:54px;background:var(--surface)}
+.item:first-child{border-top:1px solid var(--line)}
+.it-b{display:flex;flex:1;min-width:0;align-items:flex-start;justify-content:space-between;gap:12px;padding:0}
+.item .nm{font-weight:600;white-space:normal}
+.item .pr{font-size:12px;text-align:right;max-width:65%;line-height:1.5;color:var(--muted)}
+.mgrid{display:grid;gap:16px;grid-template-columns:1fr}
+.mcard{display:flex;align-items:center;gap:12px;padding:12px 14px}
+.mcard>.acts{margin-left:auto;flex-wrap:wrap}
+.mr-name{font-weight:700}
+@media(max-width:560px){.item .it-b{display:flex}.item .pr{max-width:60%;font-size:11px}.mcard{flex-wrap:wrap}.mcard>.acts{margin-left:0;width:100%}}
 </style>
 
 <div id="app" class="wrap"></div>
@@ -517,6 +531,23 @@ function migrate(d){
   return d;
 }
 function grp(m){return m.cat==='Minuman'?'Minuman':'Makanan'}
+function menuSubgroup(m){
+  var n=(m.name||'').toLowerCase();
+  if(grp(m)==='Minuman'){
+    if(/jus|juice|smoothie/.test(n))return 'Jus';
+    if(/kopi|espresso|americano|latte|cappuccino|mocha|macchiato|robusta|arabika|affogato/.test(n))return 'Kopi';
+    if(/teh|tea|matcha/.test(n))return 'Teh';
+    if(/susu|milk/.test(n))return 'Susu';
+    if(/cokelat|coklat|chocolate/.test(n))return 'Cokelat';
+    if(/soda|lemonade|mocktail/.test(n))return 'Soda & Mocktail';
+    if(/air mineral|air putih/.test(n))return 'Air Mineral';
+    return 'Minuman lainnya';
+  }
+  if(/mie|mi |bakmi|indomie|spaghetti|kwetiau|bihun/.test(n))return 'Mie';
+  if(/nasi|rice|ayam|bebek|ikan|lele|soto|sop|sup|bakso|sate|rendang/.test(n))return 'Makanan berat';
+  if(/roti|toast|sandwich|burger|pizza|martabak|pisang|kentang|goreng|snack|keripik|cireng|pempek/.test(n))return 'Camilan';
+  return 'Makanan lainnya';
+}
 function load(){try{var r=lsGet(KEY);if(r){var d=JSON.parse(r);if(validData(d))return migrate(d)}}catch(e){}return null}
 function save(){if(!lsSet(KEY,JSON.stringify(D)))toast('Data belum tersimpan permanen di perangkat ini (penyimpanan penuh atau diblokir peramban).')}
 
@@ -648,12 +679,14 @@ function drawGrid(){
     var inCart=S.cart.filter(function(i){return i.key==='m:'+m.id||i.key.indexOf('m:'+m.id+':')===0}).reduce(function(s,i){return s+i.qty},0);
     return '<button class="item'+(inCart?' sel':'')+'" data-act="add" data-id="'+m.id+'" title="'+esc(m.name)+'"'+(m.active?'':' disabled')+'>'+
       (inCart?'<span class="badge">'+inCart+'</span>':'')+
-      '<span class="ph">'+(m.photo?'<img src="'+esc(m.photo)+'" alt="">':'<i>'+esc(m.name.charAt(0).toUpperCase())+'</i>')+'</span>'+
-      '<span class="it-b"><span class="nm">'+esc(m.name)+'</span><span class="pr num">'+(m.active?(m.variants?'Mulai ':'')+rp(m.price):'Habis')+'</span></span></button>';
+      '<span class="it-b"><span class="nm">'+esc(m.name)+'</span><span class="pr num">'+(m.active?(m.variants?m.variants.map(function(v){return esc(v.label)+' — '+rp(v.price)}).join(' · '):rp(m.price)):'Habis')+'</span></span></button>';
   };
   el.innerHTML=['Makanan','Minuman'].map(function(g){
-    var items=list.filter(function(m){return grp(m)===g});
-    return items.length?'<section class="gsec"><h3 class="gh">'+g+'</h3><div class="grid">'+items.map(card).join('')+'</div></section>':'';
+    var items=list.filter(function(m){return grp(m)===g}), groups={};
+    items.forEach(function(m){var k=menuSubgroup(m);(groups[k]||(groups[k]=[])).push(m)});
+    var order=g==='Minuman'?['Kopi','Teh','Jus','Susu','Cokelat','Soda & Mocktail','Air Mineral','Minuman lainnya']:['Makanan berat','Mie','Camilan','Makanan lainnya'];
+    var keys=order.filter(function(k){return groups[k]&&groups[k].length}).concat(Object.keys(groups).filter(function(k){return order.indexOf(k)<0}));
+    return keys.map(function(k){return '<section class="gsec"><h3 class="gh">'+k+'</h3><div class="grid">'+groups[k].map(card).join('')+'</div></section>'}).join('');
   }).join('')+pickSheet();
 }
 function pickSheet(){
@@ -739,7 +772,8 @@ function saveOrder(status){
 
 /* ---------- pesanan ---------- */
 function viewPesanan(){
-  var rg=[['today','Hari ini'],['7d','7 hari'],['month','Bulan ini'],['all','Semua']];
+  var rg=[['today','Hari ini']];
+  S.of.range='today';
   var st=[['all','Semua'],['waiting','Menunggu'],['collective','Kolektif'],['paid','Lunas']];
   function chips(list,key,cur){return '<div class="chips">'+list.map(function(x){return '<button class="chip" data-act="'+key+'" data-v="'+x[0]+'" aria-pressed="'+(cur===x[0])+'">'+x[1]+'</button>'}).join('')+'</div>'}
   return '<div class="toolbar">'+chips(rg,'orange',S.of.range)+chips(st,'ostatus',S.of.status)+
@@ -793,9 +827,15 @@ function drawMenuGrid(){
   var q=S.mq.trim().toLowerCase();
   var ex=D.menu.filter(function(m){return !q||m.name.toLowerCase().indexOf(q)>=0});
   var cards=['Makanan','Minuman'].map(function(g){
-    return ex.filter(function(m){return grp(m)===g}).map(menuCard).concat(S.drafts.filter(function(d){return d.cat===g}).map(draftCard)).join('');
+    var items=ex.filter(function(m){return grp(m)===g}),groups={};
+    items.forEach(function(m){var k=menuSubgroup(m);(groups[k]||(groups[k]=[])).push(m)});
+    var order=g==='Minuman'?['Kopi','Teh','Jus','Susu','Cokelat','Soda & Mocktail','Air Mineral','Minuman lainnya']:['Makanan berat','Mie','Camilan','Makanan lainnya'];
+    var keys=order.filter(function(k){return groups[k]&&groups[k].length}).concat(Object.keys(groups).filter(function(k){return order.indexOf(k)<0}));
+    var grouped=keys.map(function(k){return '<section class="gsec"><h3 class="gh">'+k+'</h3><div class="mgrid">'+groups[k].map(menuCard).join('')+'</div></section>'}).join('');
+    var drafts=S.drafts.filter(function(d){return d.cat===g}).map(draftCard).join('');
+    return grouped+drafts;
   }).join('');
-  el.innerHTML=cards?'<div class="mgrid">'+cards+'</div>':'<div class="empty">Tidak ada menu yang cocok dengan "'+esc(S.mq)+'".</div>';
+  el.innerHTML=cards?cards:'<div class="empty">Tidak ada menu yang cocok dengan "'+esc(S.mq)+'".</div>';
 }
 function addDrafts(cat,n){for(var i=0;i<n;i++)S.drafts.push({id:'d'+uid(),name:'',cat:cat,price:'',photo:''})}
 function photoBox(id,photo){
