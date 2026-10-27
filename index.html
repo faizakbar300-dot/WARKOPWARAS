@@ -1010,7 +1010,7 @@ function exportExcel(){
 
 function viewKeuangan(){
   if(!isOwner())return '';
-  var rg=[['today','Harian (hari ini)'],['7d','Mingguan (7 hari)'],['month','Bulanan (bulan ini)'],['all','Semua']];
+  var rg=[['today','Harian '],['7d','Mingguan '],['month','Bulanan '],['all','Semua']];
   var orders=D.orders.filter(function(o){return inRange(o,S.frange)});
   var paid=orders.filter(function(o){return o.pay.status==='paid'});
   var waiting=orders.filter(function(o){return o.pay.status==='waiting'});
