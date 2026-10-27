@@ -555,16 +555,30 @@ function migrate(d){
   return d;
 }
 function grp(m){return m.cat==='Minuman'?'Minuman':'Makanan'}
+/* Pengelompokan & urutan mengikuti buku menu Warkop Waras (bukan urutan abjad) */
+var MENU_ORDER=[
+  ['Makanan berat',['Ayam Goreng Kremes','Nasi Goreng']],
+  ['Mie',['Ifu Mie','Mie Tiau','Indomie Goreng','Indomie Kuah']],
+  ['Camilan',['Kentang','Tempura','Sosis','Otak-otak','Tahu Balek','Naget','Mix 2 Varian','Mix 3 Varian']],
+  ['Kopi',['Espresso Single','Americano','Sanger','Caffe Latte','Kopi Susu','Kopi Susu GL Aren','Espresso Double']],
+  ['Menu Spesial',['Matcha Coffee Latte','Avocado Coffee Latte','Caramel Coffee Latte','Mocha Coffee Latte','Thai Tea','Matcha','Coklat','Red Velvet','Taro','Cappucino']],
+  ['Squash',['Orange Squash','Strawberry Squash','Ocean Blue Squash','Lemon Squash','Lycee Squash','Grape Squash']],
+  ['Jus & Minuman Khas',['Jus Jeruk','Jus Timun','Jus Buah Naga','Jus Alpukat','Kopi Susu Telor (KST) Peaberry','Teh Susu Telor (TST)','Wedang Waras (Jahe Serai Kunyit Nipis Madu)','Telor 1/2 Matang']],
+  ['Teh, Susu & Lainnya',['Lemon Tea','Teh Manis','Teh Hijau','Teh Susu','Teh Jahe','Susu','Es Kosong']]
+];
+var MENU_POS=(function(){var p={},i=0;MENU_ORDER.forEach(function(g){g[1].forEach(function(n){p[n.toLowerCase()]={g:g[0],i:i++}})});return p})();
+function menuGroupOrder(g){return g==='Minuman'?['Kopi','Menu Spesial','Squash','Jus & Minuman Khas','Teh, Susu & Lainnya','Minuman lainnya']:['Makanan berat','Mie','Camilan','Makanan lainnya']}
+function menuRank(m){var p=MENU_POS[(m.name||'').trim().toLowerCase()];return p?p.i:10000+D.menu.indexOf(m)}
 function menuSubgroup(m){
-  var n=(m.name||'').toLowerCase();
+  var n=(m.name||'').toLowerCase(), p=MENU_POS[n.trim()];
+  if(p&&menuGroupOrder(grp(m)).indexOf(p.g)>=0)return p.g;
+  /* menu baru buatan pemilik: tebak kelompok dari namanya */
   if(grp(m)==='Minuman'){
-    if(/jus|juice|smoothie/.test(n))return 'Jus';
-    if(/kopi|espresso|americano|latte|cappuccino|mocha|macchiato|robusta|arabika|affogato/.test(n))return 'Kopi';
-    if(/teh|tea|matcha/.test(n))return 'Teh';
-    if(/susu|milk/.test(n))return 'Susu';
-    if(/cokelat|coklat|chocolate/.test(n))return 'Cokelat';
-    if(/soda|lemonade|mocktail/.test(n))return 'Soda & Mocktail';
-    if(/air mineral|air putih/.test(n))return 'Air Mineral';
+    if(/squash/.test(n))return 'Squash';
+    if(/jus|juice|smoothie|wedang|telor/.test(n))return 'Jus & Minuman Khas';
+    if(/kopi|espresso|americano|latte|cappuccino|cappucino|mocha|macchiato|robusta|arabika|affogato|sanger/.test(n))return 'Kopi';
+    if(/matcha|taro|velvet|coklat|cokelat|chocolate|thai/.test(n))return 'Menu Spesial';
+    if(/teh|tea|susu|milk|es kosong/.test(n))return 'Teh, Susu & Lainnya';
     return 'Minuman lainnya';
   }
   if(/mie|mi |bakmi|indomie|spaghetti|kwetiau|bihun/.test(n))return 'Mie';
@@ -577,7 +591,7 @@ function save(){if(!lsSet(KEY,JSON.stringify(D)))toast('Data belum tersimpan per
 
 /* ---------- state ---------- */
 var D=null, me=null;
-var S={view:'kasir',q:'',cat:'Semua',cart:[],mq:'',sort:'name',showDetail:true,showCustom:false,paySheet:false,
+var S={view:'kasir',q:'',cat:'Semua',cart:[],mq:'',sort:'menu',showDetail:true,showCustom:false,paySheet:false,
   f:{customer:'',table:'',note:'',when:null,pay:'waiting',method:'Cash',svc:'Makan di tempat'},
   of:{range:'today',status:'all',q:''},drafts:[],
   payingId:null,confirm:null,edit:null,resetId:null,frange:'7d',backupText:null,msg:{},loginErr:''};
@@ -677,7 +691,7 @@ var SEARCH='<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="
 var SERVICES=['Makan di tempat','Bawa pulang'];
 
 function viewKasir(){
-  var sorts=[['name','Nama A–Z'],['low','Harga terendah'],['high','Harga tertinggi']];
+  var sorts=[['menu','Urutan menu'],['name','Nama A–Z'],['low','Harga terendah'],['high','Harga tertinggi']];
   return '<section class="pos"><div class="pos-menu">'+
     '<div class="searchbar">'+SEARCH+
       '<label class="sr" for="q">Cari produk</label><input id="q" data-f="q" type="search" placeholder="Cari produk di sini" value="'+esc(S.q)+'" autocomplete="off">'+
@@ -697,7 +711,7 @@ function drawGrid(){
   var el=$('grid');if(!el)return;
   var q=S.q.trim().toLowerCase();
   var list=D.menu.filter(function(m){return (S.cat==='Semua'||grp(m)===S.cat)&&(!q||m.name.toLowerCase().indexOf(q)>=0)});
-  list.sort(function(a,b){return S.sort==='low'?a.price-b.price:S.sort==='high'?b.price-a.price:a.name.localeCompare(b.name,'id')});
+  list.sort(function(a,b){return S.sort==='low'?a.price-b.price:S.sort==='high'?b.price-a.price:S.sort==='name'?a.name.localeCompare(b.name,'id'):menuRank(a)-menuRank(b)});
   if(!list.length){el.innerHTML='<div class="empty">'+(D.menu.length?'Tidak ada menu yang cocok.':'Daftar menu masih kosong. Pemilik bisa menambah menu di tab Menu.')+'</div>';return}
   var card=function(m){
     var inCart=S.cart.filter(function(i){return i.key==='m:'+m.id||i.key.indexOf('m:'+m.id+':')===0}).reduce(function(s,i){return s+i.qty},0);
@@ -708,7 +722,7 @@ function drawGrid(){
   el.innerHTML=['Makanan','Minuman'].map(function(g){
     var items=list.filter(function(m){return grp(m)===g}), groups={};
     items.forEach(function(m){var k=menuSubgroup(m);(groups[k]||(groups[k]=[])).push(m)});
-    var order=g==='Minuman'?['Kopi','Teh','Jus','Susu','Cokelat','Soda & Mocktail','Air Mineral','Minuman lainnya']:['Makanan berat','Mie','Camilan','Makanan lainnya'];
+    var order=menuGroupOrder(g);
     var keys=order.filter(function(k){return groups[k]&&groups[k].length}).concat(Object.keys(groups).filter(function(k){return order.indexOf(k)<0}));
     return keys.map(function(k){return '<section class="gsec"><h3 class="gh">'+k+'</h3><div class="grid">'+groups[k].map(card).join('')+'</div></section>'}).join('');
   }).join('')+pickSheet();
@@ -840,7 +854,7 @@ function orderCard(o){
 function viewMenu(){
   if(!isOwner())return '';
   if(!S.drafts.length&&!D.menu.length){addDrafts('Makanan',3);addDrafts('Minuman',3)}
-  return '<div class="stack"><div><h3>Daftar menu</h3><p class="hint">Makanan tampil di atas, minuman di bawah. Pada kartu kosong: pilih foto, isi nama, jenis, dan harga, lalu ketuk Simpan. Menu yang disimpan langsung muncul di tab Kasir.</p></div>'+
+  return '<div class="stack"><div><h3>Daftar menu</h3><p class="hint">Makanan tampil di atas, minuman di bawah, dikelompokkan dan diurutkan seperti buku menu Warkop Waras. Pada kartu kosong: pilih foto, isi nama, jenis, dan harga, lalu ketuk Simpan. Menu yang disimpan langsung muncul di tab Kasir.</p></div>'+
     '<div class="menu-tools"><div class="searchbar">'+SEARCH+'<label class="sr" for="mq">Cari menu</label>'+
       '<input id="mq" data-f="mq" type="search" placeholder="Cari makanan atau minuman…" value="'+esc(S.mq)+'" autocomplete="off"></div>'+
       '<button class="btn" data-act="adddraft" data-cat="Makanan">+ Kartu kosong</button></div>'+
@@ -849,11 +863,11 @@ function viewMenu(){
 function drawMenuGrid(){
   var el=$('mgrid');if(!el)return;
   var q=S.mq.trim().toLowerCase();
-  var ex=D.menu.filter(function(m){return !q||m.name.toLowerCase().indexOf(q)>=0});
+  var ex=D.menu.filter(function(m){return !q||m.name.toLowerCase().indexOf(q)>=0}).sort(function(a,b){return menuRank(a)-menuRank(b)});
   var cards=['Makanan','Minuman'].map(function(g){
     var items=ex.filter(function(m){return grp(m)===g}),groups={};
     items.forEach(function(m){var k=menuSubgroup(m);(groups[k]||(groups[k]=[])).push(m)});
-    var order=g==='Minuman'?['Kopi','Teh','Jus','Susu','Cokelat','Soda & Mocktail','Air Mineral','Minuman lainnya']:['Makanan berat','Mie','Camilan','Makanan lainnya'];
+    var order=menuGroupOrder(g);
     var keys=order.filter(function(k){return groups[k]&&groups[k].length}).concat(Object.keys(groups).filter(function(k){return order.indexOf(k)<0}));
     var grouped=keys.map(function(k){return '<section class="gsec"><h3 class="gh">'+k+'</h3><div class="mgrid">'+groups[k].map(menuCard).join('')+'</div></section>'}).join('');
     var drafts=S.drafts.filter(function(d){return d.cat===g}).map(draftCard).join('');
