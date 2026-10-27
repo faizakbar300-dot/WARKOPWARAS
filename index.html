@@ -739,7 +739,7 @@ function drawCart(){
     ?'<div class="cart-detail">'+
       '<label class="f" for="fw">Waktu pesanan (hari, tanggal, jam)<input class="inp sm" id="fw" data-f="when" type="datetime-local" value="'+whenVal+'"></label>'+
       '<div class="stamp" id="wprev"></div>'+
-      '<p class="hint">'+(f.when?'<button class="btn ghost sm" data-act="whennow" type="button">Pakai waktu sekarang</button>':'Terisi otomatis dengan waktu sekarang. Ubah bila pesanan dicatat belakangan.')+'</p>'+
+      '<p class="hint">'+(f.when?'<button class="btn ghost sm" data-act="whennow" type="button">Pakai waktu sekarang</button>':'')+'</p>'+
       '<label class="f" for="ft">Meja / no. antrean<input class="inp sm" id="ft" data-f="table" value="'+esc(f.table)+'" placeholder="Opsional" autocomplete="off"></label>'+
       '<label class="f" for="fn">Keterangan tambahan<textarea class="inp sm" id="fn" data-f="note" placeholder="mis. dibungkus, pedas, kopi dipisah gelas">'+esc(f.note)+'</textarea></label>'+
     '</div>':'';
