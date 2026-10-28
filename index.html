@@ -609,7 +609,7 @@ function save(){if(!lsSet(KEY,JSON.stringify(D)))toast('Data belum tersimpan per
 var D=null, me=null;
 var S={view:'kasir',q:'',cat:'Semua',cart:[],mq:'',sort:'menu',showDetail:true,showCustom:false,paySheet:false,
   f:{customer:'',table:'',note:'',when:null,pay:'waiting',method:'Cash',svc:'Makan di tempat'},
-  of:{range:'today',status:'all',q:'',date:''},fdate:{from:'',to:''},last:null,drafts:[],
+  of:{range:'all',status:'all',q:'',date:''},fdate:{from:'',to:''},last:null,drafts:[],
   payingId:null,confirm:null,edit:null,resetId:null,frange:'7d',backupText:null,msg:{},loginErr:''};
 var toastT=null;
 
@@ -858,18 +858,18 @@ function lastBox(){
   var o=S.last&&D.orders.filter(function(x){return x.id===S.last})[0];if(!o)return '';
   return '<div class="lastbox"><span>Pesanan '+num(o.no)+' tersimpan</span><span class="acts"><button class="btn sm" data-act="printrc" data-id="'+o.id+'">Cetak struk</button><button class="btn ghost sm" data-act="lastx" aria-label="Tutup">✕</button></span></div>';
 }
-function visibleOrder(o){return isOwner()||(!o.closed&&(inRange(o,'today')||o.pay.status!=='paid'))}
+function visibleOrder(o){return isOwner()||(!o.closed&&inRange(o,'today'))}
 
 /* ---------- tutup buku ---------- */
 function bookPanel(){
   if(!isOwner())return '';
-  var end=rangeOf('today')[1],cand=D.orders.filter(function(o){return !o.closed&&o.pay.status==='paid'&&new Date(o.ts)<end});
-  var unp=D.orders.filter(function(o){return !o.closed&&o.pay.status!=='paid'}).length;
+  var end=rangeOf('today')[1],cand=D.orders.filter(function(o){return !o.closed&&new Date(o.ts)<end});
+  var unp=cand.filter(function(o){return o.pay.status!=='paid'}).length;
   var last=(D.closings||[])[(D.closings||[]).length-1];
   var body=S.confirm==='close'
-    ?'<span class="hint">Tutup buku untuk '+cand.length+' pesanan lunas ('+rp(cand.reduce(function(t,o){return t+otot(o)},0))+')? Akun kasir tidak akan melihatnya lagi.</span><div class="acts"><button class="btn sm" data-act="closeyes">Ya, tutup buku</button><button class="btn ghost sm" data-act="delno">Batal</button></div>'
+    ?'<span class="hint">Tutup buku untuk '+cand.length+' pesanan ('+rp(cand.reduce(function(t,o){return t+otot(o)},0))+')'+(unp?', termasuk '+unp+' yang belum lunas':'')+'? Seluruh riwayat pesanan di akun kasir akan hilang, tetapi tetap tersimpan di akun pemilik.</span><div class="acts"><button class="btn sm" data-act="closeyes">Ya, tutup buku</button><button class="btn ghost sm" data-act="delno">Batal</button></div>'
     :'<div class="acts"><button class="btn sm" data-act="closeask"'+(cand.length?'':' disabled')+'>Tutup buku harian</button>'+(last?'<button class="btn ghost sm" data-act="closeundo">Batalkan tutup buku terakhir</button>':'')+'</div>';
-  return '<div class="panel bookbox"><div><b>Tutup buku harian</b><p class="hint">Pesanan lunas sampai hari ini disembunyikan dari akun kasir, tetapi tetap tersimpan di akun pemilik dan laporan keuangan. '+(unp?unp+' pesanan belum lunas tetap tampil di kasir sampai dilunasi. ':'')+(last?'Terakhir ditutup: '+fmtDayS(new Date(last.at))+' pukul '+fmtTime(new Date(last.at))+' ('+last.n+' pesanan).':'')+'</p></div>'+body+'</div>';
+  return '<div class="panel bookbox"><div><b>Tutup buku harian</b><p class="hint">Semua riwayat pesanan sampai hari ini (dari kasir maupun pemilik) dihapus dari tampilan akun kasir, tetapi tetap tersimpan di riwayat pesanan akun pemilik dan laporan keuangan. '+(unp?unp+' pesanan belum lunas ikut disembunyikan dari kasir; pemilik tetap bisa melunasinya. ':'')+(last?'Terakhir ditutup: '+fmtDayS(new Date(last.at))+' pukul '+fmtTime(new Date(last.at))+' ('+last.n+' pesanan).':'')+'</p></div>'+body+'</div>';
 }
 
 /* ---------- pesanan ---------- */
@@ -1251,9 +1251,9 @@ var A={
   closeyes:function(){
     if(!needOwner())return;
     var end=rangeOf('today')[1],cid='c'+uid(),n=0,tot=0;
-    D.orders.forEach(function(o){if(!o.closed&&o.pay.status==='paid'&&new Date(o.ts)<end){o.closed=cid;n++;tot+=otot(o)}});
+    D.orders.forEach(function(o){if(!o.closed&&new Date(o.ts)<end){o.closed=cid;n++;tot+=otot(o)}});
     D.closings=D.closings||[];D.closings.push({id:cid,at:new Date().toISOString(),by:me.username,n:n,total:tot});
-    save();S.confirm=null;renderView();toast('Buku ditutup: '+n+' pesanan ('+rp(tot)+') disembunyikan dari kasir');
+    save();S.confirm=null;renderView();toast('Buku ditutup: '+n+' pesanan ('+rp(tot)+') disembunyikan dari kasir, tetap ada di akun pemilik');
   },
   closeundo:function(){
     if(!needOwner())return;var l=(D.closings||[]).pop();if(!l)return;
