@@ -429,6 +429,15 @@ h1,h2,h3{font-weight:700}
 .dates{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
 .dates label.f{min-width:150px;flex:1}
 .rcpt-wrap{display:none}
+.stat.bad b{color:var(--bad)}
+.stat.bad span::before{background:var(--bad)}
+.tw{overflow-x:auto}
+.tbl{width:100%;border-collapse:collapse;font-size:14px}
+.tbl th,.tbl td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+.tbl th:first-child,.tbl td:first-child{text-align:left}
+.tbl th{font-size:12px;color:var(--muted);font-weight:700}
+.tbl tfoot td{font-weight:700;background:var(--accent-soft);border-bottom:0}
+.ur .tag{margin-left:8px}
 @media print{
   @page{size:A4;margin:14mm}
   #printarea.rcpt{font:12px/1.35 'Courier New',Courier,monospace;color:#000}
@@ -481,6 +490,7 @@ var ST={waiting:'Menunggu',collective:'Kolektif',paid:'Lunas'};
 function rp(n){return 'Rp '+Math.round(n).toLocaleString('id-ID')}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function pad(n){return String(n).padStart(2,'0')}
+function ymd(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
 function toLocalInput(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes())}
 function fmtDay(d){return new Intl.DateTimeFormat('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).format(d)}
 function fmtDayS(d){return new Intl.DateTimeFormat('id-ID',{weekday:'short',day:'numeric',month:'short',year:'numeric'}).format(d)}
@@ -529,7 +539,7 @@ function defaultMenu(){
 
 /* ---------- data awal ---------- */
 async function seed(){
-  return {v:6,closings:[],receipt:rcDef(),shop:'Warkop Waras',seq:0,showHint:true,
+  return {v:7,closings:[],expenses:[],receipt:rcDef(),shop:'Warkop Waras',seq:0,showHint:true,
     users:[
       {id:'u1',username:'pemilik',name:'Pemilik',role:'owner',pw:await pw('pemilik','1234')},
       {id:'u2',username:'kasir',name:'Kasir 1',role:'staff',pw:await pw('kasir','1234')}],
@@ -568,6 +578,8 @@ function migrate(d){
     d.v=5;
   }
   if(d.v<6){d.closings=d.closings||[];d.receipt=Object.assign(rcDef(),d.receipt||{});d.v=6}
+  if(d.v<7){d.v=7}
+  d.expenses=d.expenses||[];
   return d;
 }
 function grp(m){return m.cat==='Minuman'?'Minuman':'Makanan'}
@@ -610,17 +622,18 @@ var D=null, me=null;
 var S={view:'kasir',q:'',cat:'Semua',cart:[],mq:'',sort:'menu',showDetail:true,showCustom:false,paySheet:false,
   f:{customer:'',table:'',note:'',when:null,pay:'waiting',method:'Cash',svc:'Makan di tempat'},
   of:{range:'all',status:'all',q:'',date:''},fdate:{from:'',to:''},last:null,drafts:[],
-  payingId:null,confirm:null,edit:null,resetId:null,frange:'7d',backupText:null,msg:{},loginErr:''};
+  payingId:null,confirm:null,edit:null,resetId:null,frange:'day',xrange:'today',closeDate:'',backupText:null,msg:{},loginErr:''};
 var toastT=null;
 
 function isOwner(){return !!me&&me.role==='owner'}
 function needOwner(){if(!isOwner()){toast('Hanya pemilik yang bisa melakukan ini.');return false}return true}
-function allowed(){return isOwner()?['kasir','pesanan','menu','keuangan','pengaturan']:['kasir','pesanan','pengaturan']}
+function allowed(){return isOwner()?['kasir','pesanan','menu','pengeluaran','keuangan','pengaturan']:['kasir','pesanan','pengaturan']}
 function toast(t){var el=$('toast');el.textContent=t;el.hidden=false;clearTimeout(toastT);toastT=setTimeout(function(){el.hidden=true},2600)}
 function rangeOf(k){
   var n=new Date(),s=new Date(n.getFullYear(),n.getMonth(),n.getDate());
   function pd(v){var p=String(v||'').split('-');return p.length===3?new Date(+p[0],+p[1]-1,+p[2]):s}
   if(k==='custom'){var a=pd(S.fdate.from),b=pd(S.fdate.to||S.fdate.from);return [a,new Date(b.getFullYear(),b.getMonth(),b.getDate()+1)]}
+  if(k==='day'){var e0=pd(S.fdate.day);return [e0,new Date(e0.getFullYear(),e0.getMonth(),e0.getDate()+1)]}
   if(k==='date'){var c=pd(S.of.date);return [c,new Date(c.getFullYear(),c.getMonth(),c.getDate()+1)]}
   if(k==='today')return [s,new Date(s.getTime()+864e5)];
   if(k==='7d')return [new Date(s.getTime()-6*864e5),new Date(s.getTime()+864e5)];
@@ -638,6 +651,7 @@ var IC={
   pesanan:'<path d="M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1z"/><path d="M8 6H6a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-2"/><path d="M9 12h6M9 16h4"/>',
   menu:'<path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/>',
   keuangan:'<path d="M5 20V10M12 20V4M19 20v-7"/>',
+  pengeluaran:'<path d="M12 3v13"/><path d="M6 11l6 6 6-6"/><path d="M5 21h14"/>',
   pengaturan:'<path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 5v4M6 15v4"/>',
   out:'<path d="M10 4H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4"/><path d="M15 8l4 4-4 4M19 12H9"/>',
   logo:'<path d="M5 10h11v4a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5v-4z"/><path d="M16 11h1.5a2.5 2.5 0 0 1 0 5H16"/><path d="M8.5 3.5c0 1.4 1.5 1.4 1.5 2.8M12.5 3.5c0 1.4 1.5 1.4 1.5 2.8"/>'
@@ -660,7 +674,7 @@ function loginHTML(){
 function render(){
   if(!me){app.innerHTML=loginHTML();updateDock();return}
   if(allowed().indexOf(S.view)<0)S.view='kasir';
-  var tabs=isOwner()?[['kasir','Kasir'],['pesanan','Pesanan'],['menu','Menu'],['keuangan','Keuangan'],['pengaturan','Pengaturan']]:[['kasir','Kasir'],['pesanan','Pesanan'],['pengaturan','Akun']];
+  var tabs=isOwner()?[['kasir','Kasir'],['pesanan','Pesanan'],['menu','Menu'],['pengeluaran','Pengeluaran'],['keuangan','Keuangan'],['pengaturan','Pengaturan']]:[['kasir','Kasir'],['pesanan','Pesanan'],['pengaturan','Akun']];
   app.innerHTML='<header class="top"><div class="brandrow"><span class="logo img">'+logoImg()+'</span><div><div class="brand">'+esc(D.shop)+'</div><div class="clock" id="clock"></div></div></div>'+
     '<div class="who"><span class="avatar" aria-hidden="true">'+esc(me.name.charAt(0).toUpperCase())+'</span><div class="whoin"><span class="uname">'+esc(me.name)+'</span><span class="role '+(isOwner()?'owner':'staff')+'">'+(isOwner()?'Pemilik':'Kasir')+'</span></div>'+
     '<button class="btn ghost sm lo" data-act="logout" aria-label="Keluar" title="Keluar">'+svg(IC.out,18)+'<span>Keluar</span></button></div></header>'+
@@ -678,7 +692,7 @@ function setView(v){
 }
 function renderView(){
   var m=$('main');if(!m)return;
-  var v={kasir:viewKasir,pesanan:viewPesanan,menu:viewMenu,keuangan:viewKeuangan,pengaturan:viewPengaturan}[S.view];
+  var v={kasir:viewKasir,pesanan:viewPesanan,menu:viewMenu,pengeluaran:viewPengeluaran,keuangan:viewKeuangan,pengaturan:viewPengaturan}[S.view];
   m.innerHTML=v();
   if(S.view==='kasir'){drawCats();drawGrid();drawCart()}
   if(S.view==='pesanan')drawOrders();
@@ -861,15 +875,23 @@ function lastBox(){
 function visibleOrder(o){return isOwner()||(!o.closed&&inRange(o,'today'))}
 
 /* ---------- tutup buku ---------- */
+function closeEnd(){
+  var p=String(S.closeDate||'').split('-'),t=new Date();
+  var b=p.length===3?new Date(+p[0],+p[1]-1,+p[2]):new Date(t.getFullYear(),t.getMonth(),t.getDate());
+  if(isNaN(b))b=new Date(t.getFullYear(),t.getMonth(),t.getDate());
+  return new Date(b.getFullYear(),b.getMonth(),b.getDate()+1);
+}
 function bookPanel(){
   if(!isOwner())return '';
-  var end=rangeOf('today')[1],cand=D.orders.filter(function(o){return !o.closed&&new Date(o.ts)<end});
+  if(!S.closeDate)S.closeDate=ymd(new Date());
+  var end=closeEnd(),cd=new Date(end.getTime()-1),cand=D.orders.filter(function(o){return !o.closed&&new Date(o.ts)<end});
   var unp=cand.filter(function(o){return o.pay.status!=='paid'}).length;
-  var last=(D.closings||[])[(D.closings||[]).length-1];
+  var cl=D.closings||[],last=cl[cl.length-1];
+  var picker='<label class="f" for="cd">Tutup buku sampai tanggal<input class="inp sm" id="cd" type="date" data-f="cdate" value="'+esc(S.closeDate)+'"></label>';
   var body=S.confirm==='close'
-    ?'<span class="hint">Tutup buku untuk '+cand.length+' pesanan ('+rp(cand.reduce(function(t,o){return t+otot(o)},0))+')'+(unp?', termasuk '+unp+' yang belum lunas':'')+'? Seluruh riwayat pesanan di akun kasir akan hilang, tetapi tetap tersimpan di akun pemilik.</span><div class="acts"><button class="btn sm" data-act="closeyes">Ya, tutup buku</button><button class="btn ghost sm" data-act="delno">Batal</button></div>'
-    :'<div class="acts"><button class="btn sm" data-act="closeask"'+(cand.length?'':' disabled')+'>Tutup buku harian</button>'+(last?'<button class="btn ghost sm" data-act="closeundo">Batalkan tutup buku terakhir</button>':'')+'</div>';
-  return '<div class="panel bookbox"><div><b>Tutup buku harian</b><p class="hint">Semua riwayat pesanan sampai hari ini (dari kasir maupun pemilik) dihapus dari tampilan akun kasir, tetapi tetap tersimpan di riwayat pesanan akun pemilik dan laporan keuangan. '+(unp?unp+' pesanan belum lunas ikut disembunyikan dari kasir; pemilik tetap bisa melunasinya. ':'')+(last?'Terakhir ditutup: '+fmtDayS(new Date(last.at))+' pukul '+fmtTime(new Date(last.at))+' ('+last.n+' pesanan).':'')+'</p></div>'+body+'</div>';
+    ?'<span class="hint">Tutup buku sampai '+esc(fmtDayS(cd))+' untuk '+cand.length+' pesanan ('+rp(cand.reduce(function(t,o){return t+otot(o)},0))+')'+(unp?', termasuk '+unp+' yang belum lunas':'')+'? Riwayat pesanan sampai tanggal itu akan hilang dari akun kasir, tetapi tetap tersimpan di akun pemilik.</span><div class="acts"><button class="btn sm" data-act="closeyes">Ya, tutup buku</button><button class="btn ghost sm" data-act="delno">Batal</button></div>'
+    :'<div class="acts"><button class="btn sm" data-act="closeask"'+(cand.length?'':' disabled')+'>Tutup buku sampai '+esc(fmtDayS(cd))+'</button>'+(last?'<button class="btn ghost sm" data-act="closeundo">Batalkan tutup buku terakhir</button>':'')+'</div>';
+  return '<div class="panel bookbox"><div><b>Tutup buku</b><p class="hint">Pilih tanggal batas, lalu tutup buku. Semua pesanan sampai tanggal itu disembunyikan dari akun kasir, tetapi tetap ada di riwayat pesanan akun pemilik dan laporan keuangan. '+(cand.length?cand.length+' pesanan akan ditutup'+(unp?' ('+unp+' belum lunas, pemilik tetap bisa melunasinya)':'')+'. ':'Tidak ada pesanan terbuka sampai tanggal ini. ')+(last?'Terakhir ditutup: '+fmtDayS(new Date(last.at))+' pukul '+fmtTime(new Date(last.at))+(last.upto?', sampai '+fmtDayS(new Date(last.upto)):'')+' ('+last.n+' pesanan).':'')+'</p></div>'+picker+body+'</div>';
 }
 
 /* ---------- pesanan ---------- */
@@ -1001,42 +1023,53 @@ function menuCard(m){
 function rangeLabel(k){
   if(k==='all')return 'Semua data';
   var r=rangeOf(k),a=r[0],b=new Date(r[1].getTime()-1);
-  var nm={today:'Harian',['7d']:'Mingguan',month:'Bulanan',custom:'Periode',date:'Tanggal'}[k];
+  var nm={today:'Harian',day:'Harian',['7d']:'Mingguan',month:'Bulanan',custom:'Periode',date:'Tanggal'}[k];
   return nm+': '+(k==='today'||+a===+new Date(b.getFullYear(),b.getMonth(),b.getDate())?fmtDayS(a):fmtDayS(a)+' s/d '+fmtDayS(b));
 }
 function repData(k){
   var orders=D.orders.filter(function(o){return inRange(o,k)}).sort(function(a,b){return new Date(a.ts)-new Date(b.ts)});
-  var sum={n:orders.length,paid:0,waiting:0,coll:0,np:0,nw:0,nc:0,all:0};
-  var days={},meth={};
+  var exps=(D.expenses||[]).filter(function(x){return inRange(x,k)}).sort(function(a,b){return new Date(a.ts)-new Date(b.ts)});
+  var sum={n:orders.length,paid:0,waiting:0,coll:0,np:0,nw:0,nc:0,all:0,exp:0,nx:exps.length};
+  var days={},meth={},xcat={};
+  METHODS.forEach(function(m){meth[m]=0});
+  function dg(ts){var d=new Date(ts),key=ymd(d);return days[key]||(days[key]={d:new Date(d.getFullYear(),d.getMonth(),d.getDate()),n:0,paid:0,waiting:0,coll:0,all:0,exp:0,m:{Cash:0,QRIS:0,Transfer:0}})}
   orders.forEach(function(o){
-    var t=otot(o),d=new Date(o.ts),key=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
-    var g=days[key]||(days[key]={d:new Date(d.getFullYear(),d.getMonth(),d.getDate()),n:0,paid:0,waiting:0,coll:0,all:0});
+    var t=otot(o),g=dg(o.ts);
     g.n++;g.all+=t;sum.all+=t;
-    if(o.pay.status==='paid'){sum.paid+=t;sum.np++;g.paid+=t;meth[o.pay.method]=(meth[o.pay.method]||0)+t}
+    if(o.pay.status==='paid'){sum.paid+=t;sum.np++;g.paid+=t;meth[o.pay.method]=(meth[o.pay.method]||0)+t;g.m[o.pay.method]=(g.m[o.pay.method]||0)+t}
     else if(o.pay.status==='collective'){sum.coll+=t;sum.nc++;g.coll+=t}
     else{sum.waiting+=t;sum.nw++;g.waiting+=t}
   });
+  exps.forEach(function(x){var g=dg(x.ts);g.exp+=x.amount;sum.exp+=x.amount;xcat[x.cat]=(xcat[x.cat]||0)+x.amount});
   var dl=Object.keys(days).sort().map(function(x){return days[x]});
-  return {orders:orders,sum:sum,days:dl,meth:meth};
+  return {orders:orders,exps:exps,sum:sum,days:dl,meth:meth,xcat:xcat};
 }
 function payText(o){return o.pay.status==='paid'?'Lunas ('+o.pay.method+')':ST[o.pay.status]}
 function itemsText(o){return o.items.map(function(i){return i.qty+'x '+i.name+(i.note?' ['+i.note+']':'')}).join('; ')}
 function printReport(){
-  if(!needOwner())return;ps('');$('printarea').className='';
-  var k=S.frange,R=repData(k),s=R.sum,now=new Date();
+  if(!needOwner())return;
+  if(S.frange==='custom'&&S.fdate.from>(S.fdate.to||S.fdate.from)){toast('Tanggal "Dari" harus sebelum atau sama dengan "Sampai".');return}
+  $('printarea').className='';ps('@page{size:A4 landscape;margin:12mm}');
+  var k=S.frange,R=repData(k),s=R.sum,now=new Date(),net=s.paid-s.exp;
+  function dayRow(g){return '<tr><td>'+esc(fmtDayS(g.d))+'</td><td class="r">'+g.n+'</td><td class="r">'+rp(g.m.Cash)+'</td><td class="r">'+rp(g.m.QRIS)+'</td><td class="r">'+rp(g.m.Transfer)+'</td><td class="r">'+rp(g.paid)+'</td><td class="r">'+rp(g.coll)+'</td><td class="r">'+rp(g.waiting)+'</td><td class="r">'+rp(g.all)+'</td><td class="r">'+rp(g.exp)+'</td><td class="r">'+rp(g.paid-g.exp)+'</td></tr>'}
   var h='<h1>Laporan Keuangan &amp; Pembelian — '+esc(D.shop)+'</h1>'+
     '<div class="pm">Periode: '+esc(rangeLabel(k))+'<br>Dicetak: '+esc(fmtDayS(now))+' pukul '+fmtTime(now)+' oleh '+esc(me.name)+'</div>'+
     '<h2>Ringkasan</h2><table class="sum"><tbody>'+
-    '<tr><td>Pemasukan (lunas)</td><td class="r">'+rp(s.paid)+' ('+s.np+' pesanan)</td></tr>'+
+    METHODS.map(function(m){return '<tr><td>Pemasukan '+esc(m)+'</td><td class="r">'+rp(R.meth[m]||0)+'</td></tr>'}).join('')+
+    '<tr><td>Total uang masuk (lunas)</td><td class="r">'+rp(s.paid)+' ('+s.np+' pesanan)</td></tr>'+
+    '<tr><td>Kolektif (belum dibayar)</td><td class="r">'+rp(s.coll)+' ('+s.nc+' pesanan)</td></tr>'+
     '<tr><td>Menunggu bayar</td><td class="r">'+rp(s.waiting)+' ('+s.nw+' pesanan)</td></tr>'+
-    '<tr><td>Kolektif</td><td class="r">'+rp(s.coll)+' ('+s.nc+' pesanan)</td></tr>'+
-    '<tr><td>Total semua pembelian</td><td class="r">'+rp(s.all)+' ('+s.n+' pesanan)</td></tr>'+
+    '<tr><td>Jumlah keseluruhan penjualan</td><td class="r">'+rp(s.all)+' ('+s.n+' pesanan)</td></tr>'+
+    '<tr><td>Total pengeluaran</td><td class="r">'+rp(s.exp)+' ('+s.nx+' catatan)</td></tr>'+
+    '<tr><td>Laba bersih (lunas dikurangi pengeluaran)</td><td class="r">'+rp(net)+'</td></tr>'+
     '<tr><td>Rata-rata per pesanan lunas</td><td class="r">'+rp(s.np?s.paid/s.np:0)+'</td></tr>'+
-    Object.keys(R.meth).map(function(m){return '<tr><td>Lunas via '+esc(m)+'</td><td class="r">'+rp(R.meth[m])+'</td></tr>'}).join('')+
     '</tbody></table>'+
-    '<h2>Rekap per hari</h2><table><thead><tr><th>Tanggal</th><th class="r">Pesanan</th><th class="r">Lunas</th><th class="r">Menunggu</th><th class="r">Kolektif</th><th class="r">Total</th></tr></thead><tbody>'+
-    (R.days.length?R.days.map(function(g){return '<tr><td>'+esc(fmtDayS(g.d))+'</td><td class="r">'+g.n+'</td><td class="r">'+rp(g.paid)+'</td><td class="r">'+rp(g.waiting)+'</td><td class="r">'+rp(g.coll)+'</td><td class="r">'+rp(g.all)+'</td></tr>'}).join(''):'<tr><td colspan="6">Tidak ada pesanan pada periode ini.</td></tr>')+
-    '</tbody><tfoot><tr><td>Total</td><td class="r">'+s.n+'</td><td class="r">'+rp(s.paid)+'</td><td class="r">'+rp(s.waiting)+'</td><td class="r">'+rp(s.coll)+'</td><td class="r">'+rp(s.all)+'</td></tr></tfoot></table>'+
+    '<h2>Rekap per hari</h2><table><thead><tr><th>Tanggal</th><th class="r">Pesanan</th><th class="r">Cash</th><th class="r">QRIS</th><th class="r">Transfer</th><th class="r">Total lunas</th><th class="r">Kolektif</th><th class="r">Menunggu</th><th class="r">Total penjualan</th><th class="r">Pengeluaran</th><th class="r">Lunas &minus; Pengeluaran</th></tr></thead><tbody>'+
+    (R.days.length?R.days.map(dayRow).join(''):'<tr><td colspan="11">Tidak ada data pada periode ini.</td></tr>')+
+    '</tbody><tfoot><tr><td>Total</td><td class="r">'+s.n+'</td><td class="r">'+rp(R.meth.Cash||0)+'</td><td class="r">'+rp(R.meth.QRIS||0)+'</td><td class="r">'+rp(R.meth.Transfer||0)+'</td><td class="r">'+rp(s.paid)+'</td><td class="r">'+rp(s.coll)+'</td><td class="r">'+rp(s.waiting)+'</td><td class="r">'+rp(s.all)+'</td><td class="r">'+rp(s.exp)+'</td><td class="r">'+rp(net)+'</td></tr></tfoot></table>'+
+    '<h2>Daftar pengeluaran</h2><table><thead><tr><th>Tanggal</th><th>Kategori</th><th>Keterangan</th><th class="r">Jumlah</th></tr></thead><tbody>'+
+    (R.exps.length?R.exps.map(function(x){var d=new Date(x.ts);return '<tr><td>'+esc(fmtDayS(d))+'</td><td>'+esc(x.cat)+'</td><td>'+esc(x.name)+(x.note?' ('+esc(x.note)+')':'')+'</td><td class="r">'+rp(x.amount)+'</td></tr>'}).join(''):'<tr><td colspan="4">Tidak ada pengeluaran.</td></tr>')+
+    '</tbody><tfoot><tr><td colspan="3">Total pengeluaran</td><td class="r">'+rp(s.exp)+'</td></tr></tfoot></table>'+
     '<h2>Daftar pembelian</h2><table><thead><tr><th>No</th><th>Waktu</th><th>Pemesan / Meja</th><th>Pesanan</th><th>Status</th><th class="r">Total</th></tr></thead><tbody>'+
     (R.orders.length?R.orders.map(function(o){var d=new Date(o.ts);return '<tr><td>'+num(o.no)+'</td><td>'+esc(fmtDayS(d))+'<br>'+fmtTime(d)+'</td><td>'+esc(o.customer||'-')+(o.table?' / Meja '+esc(o.table):'')+'<br>'+esc(o.svc||'')+'</td><td>'+esc(itemsText(o))+(o.note?'<br><i>'+esc(o.note)+'</i>':'')+'</td><td>'+esc(payText(o))+'</td><td class="r">'+rp(otot(o))+'</td></tr>'}).join(''):'<tr><td colspan="6">Tidak ada pesanan.</td></tr>')+
     '</tbody><tfoot><tr><td colspan="5">Total</td><td class="r">'+rp(s.all)+'</td></tr></tfoot></table>';
@@ -1056,15 +1089,19 @@ function xsheet(name,widths,rows){
 function exportExcel(){
   if(!needOwner())return;
   if(S.frange==='custom'&&S.fdate.from>(S.fdate.to||S.fdate.from)){toast('Tanggal "Dari" harus sebelum atau sama dengan "Sampai".');return}
-  var k=S.frange,R=repData(k),s=R.sum,now=new Date();
+  var k=S.frange,R=repData(k),s=R.sum,now=new Date(),net=s.paid-s.exp;
   var sum=[xrow(['Laporan Keuangan & Pembelian — '+D.shop],'t'),xrow(['Periode',rangeLabel(k)]),xrow(['Dibuat',fmtDayS(now)+' '+fmtTime(now)+' oleh '+me.name]),xrow([]),
-    xrow(['Keterangan','Jumlah pesanan','Nominal (Rp)'],'h'),
-    xrow(['Pemasukan (lunas)',s.np,s.paid]),xrow(['Menunggu bayar',s.nw,s.waiting]),xrow(['Kolektif',s.nc,s.coll]),xrow(['Total semua pembelian',s.n,s.all],'b'),
-    xrow(['Rata-rata per pesanan lunas','',Math.round(s.np?s.paid/s.np:0)]),xrow([]),xrow(['Pemasukan lunas per metode','','Nominal (Rp)'],'h')]
-    .concat(Object.keys(R.meth).length?Object.keys(R.meth).map(function(m){return xrow([m,'',R.meth[m]])}):[xrow(['Belum ada pembayaran lunas','',0])]);
-  var dayRows=[xrow(['Tanggal','Pesanan','Lunas (Rp)','Menunggu (Rp)','Kolektif (Rp)','Total (Rp)'],'h')]
-    .concat(R.days.map(function(g){return xrow([fmtDayS(g.d),g.n,g.paid,g.waiting,g.coll,g.all])}))
-    .concat([xrow(['Total',s.n,s.paid,s.waiting,s.coll,s.all],'b')]);
+    xrow(['Keterangan','Jumlah pesanan','Nominal (Rp)'],'h')]
+    .concat(METHODS.map(function(m){return xrow(['Pemasukan '+m,'',R.meth[m]||0])}))
+    .concat([xrow(['Total uang masuk (lunas)',s.np,s.paid],'b'),xrow(['Kolektif (belum dibayar)',s.nc,s.coll]),xrow(['Menunggu bayar',s.nw,s.waiting]),
+      xrow(['Jumlah keseluruhan penjualan',s.n,s.all],'b'),xrow(['Total pengeluaran',s.nx,s.exp]),xrow(['Laba bersih (lunas dikurangi pengeluaran)','',net],'b'),
+      xrow(['Rata-rata per pesanan lunas','',Math.round(s.np?s.paid/s.np:0)])]);
+  var dayRows=[xrow(['Tanggal','Pesanan','Cash (Rp)','QRIS (Rp)','Transfer (Rp)','Total lunas (Rp)','Kolektif (Rp)','Menunggu (Rp)','Total penjualan (Rp)','Pengeluaran (Rp)','Lunas - Pengeluaran (Rp)'],'h')]
+    .concat(R.days.map(function(g){return xrow([fmtDayS(g.d),g.n,g.m.Cash,g.m.QRIS,g.m.Transfer,g.paid,g.coll,g.waiting,g.all,g.exp,g.paid-g.exp])}))
+    .concat([xrow(['Total',s.n,R.meth.Cash||0,R.meth.QRIS||0,R.meth.Transfer||0,s.paid,s.coll,s.waiting,s.all,s.exp,net],'b')]);
+  var expRows=[xrow(['Tanggal','Jam','Kategori','Keterangan','Catatan','Dicatat oleh','Jumlah (Rp)'],'h')]
+    .concat(R.exps.map(function(x){var d=new Date(x.ts);return xrow([fmtDayS(d),fmtTime(d),x.cat,x.name,x.note||'',x.by||'',x.amount])}))
+    .concat([xrow(['Total','','','','','',s.exp],'b')]);
   var ordRows=[xrow(['No','Tanggal','Jam','Pemesan','Meja','Layanan','Pesanan','Keterangan','Status','Metode','Kasir','Total (Rp)'],'h')]
     .concat(R.orders.map(function(o){var d=new Date(o.ts);return xrow([num(o.no),fmtDayS(d),fmtTime(d),o.customer||'',o.table||'',o.svc||'',itemsText(o),o.note||'',ST[o.pay.status],o.pay.status==='paid'?o.pay.method:'',o.by||'',otot(o)])}))
     .concat([xrow(['Total','','','','','','','','','','',s.all],'b')]);
@@ -1078,30 +1115,52 @@ function exportExcel(){
     '<Style ss:ID="t"><Font ss:Bold="1" ss:Size="14"/></Style>'+
     '<Style ss:ID="b"><Font ss:Bold="1"/><Interior ss:Color="#E2F2DF" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
     '<Style ss:ID="n"><NumberFormat ss:Format="#,##0"/></Style></Styles>'+
-    xsheet('Ringkasan',[210,120,120],sum)+xsheet('Rekap Harian',[150,70,100,100,100,100],dayRows)+
+    xsheet('Ringkasan',[260,120,120],sum)+xsheet('Rekap Harian',[150,70,100,100,100,110,100,100,120,110,130],dayRows)+
+    xsheet('Pengeluaran',[110,50,130,220,160,90,100],expRows)+
     xsheet('Pembelian',[60,110,50,110,50,100,320,160,90,80,70,100],ordRows)+xsheet('Rincian Menu',[70,110,50,110,200,140,60,110,100,90],itRows)+'</Workbook>';
-  var nm={today:'harian',['7d']:'mingguan',month:'bulanan',custom:'periode',all:'semua'}[k];
-  var fn='laporan-'+D.shop.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')+'-'+nm+(k==='custom'?'-'+S.fdate.from.replace(/-/g,'')+'-sd-'+S.fdate.to.replace(/-/g,''):'')+'-'+now.getFullYear()+pad(now.getMonth()+1)+pad(now.getDate())+'.xls';
+  var nm={today:'harian',day:'harian',['7d']:'mingguan',month:'bulanan',custom:'periode',all:'semua'}[k];
+  var fn='laporan-'+D.shop.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')+'-'+nm+(k==='custom'?'-'+S.fdate.from.replace(/-/g,'')+'-sd-'+S.fdate.to.replace(/-/g,''):k==='day'?'-'+S.fdate.day.replace(/-/g,''):'')+'-'+now.getFullYear()+pad(now.getMonth()+1)+pad(now.getDate())+'.xls';
   try{
-    var blob=new Blob(['﻿'+xml],{type:'application/vnd.ms-excel'}),a=document.createElement('a');
+    var blob=new Blob(['\ufeff'+xml],{type:'application/vnd.ms-excel'}),a=document.createElement('a');
     a.href=URL.createObjectURL(blob);a.download=fn;document.body.appendChild(a);a.click();
     setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},1500);
     toast('File Excel diunduh: '+fn);
   }catch(e){toast('Unduhan tidak berhasil di peramban ini.')}
 }
 
+var EXCATS=['Bahan baku','Gaji karyawan','Listrik, air & gas','Sewa','Peralatan','Lain-lain'];
+function viewPengeluaran(){
+  if(!isOwner())return '';
+  var rg=[['today','Hari ini'],['7d','7 hari'],['month','Bulan ini'],['all','Semua']];
+  var list=(D.expenses||[]).filter(function(x){return inRange(x,S.xrange)}).sort(function(a,b){return new Date(b.ts)-new Date(a.ts)});
+  var tot=list.reduce(function(t,x){return t+x.amount},0),by={};
+  list.forEach(function(x){by[x.cat]=(by[x.cat]||0)+x.amount});
+  var cats=Object.keys(by).sort(function(a,b){return by[b]-by[a]});
+  var form='<form class="panel stack" data-form="addexp" autocomplete="off"><h3>Catat pengeluaran</h3>'+
+    '<div class="two"><label class="f" for="xd">Tanggal<input class="inp" id="xd" name="date" type="date" value="'+ymd(new Date())+'" required></label>'+
+    '<label class="f" for="xc">Kategori<select class="inp" id="xc" name="cat">'+EXCATS.map(function(c){return '<option>'+esc(c)+'</option>'}).join('')+'</select></label></div>'+
+    '<label class="f" for="xn">Keterangan<input class="inp" id="xn" name="name" placeholder="mis. Beli biji kopi 2 kg" required></label>'+
+    '<label class="f" for="xa">Jumlah (Rp)<input class="inp" id="xa" name="amount" inputmode="numeric" placeholder="50000" required></label>'+
+    '<label class="f" for="xt">Catatan (opsional)<input class="inp" id="xt" name="note"></label>'+
+    '<button class="btn" type="submit">Simpan pengeluaran</button>'+msg('exp')+'</form>';
+  var rows=list.map(function(x){var d=new Date(x.ts);
+    return '<li class="ur"><div><b>'+esc(x.name)+'</b><span class="tag">'+esc(x.cat)+'</span><div class="hint">'+esc(fmtDayS(d))+' · pukul '+fmtTime(d)+(x.note?' · '+esc(x.note):'')+'</div></div>'+
+      '<div class="acts"><b class="num">'+rp(x.amount)+'</b>'+(S.confirm==='exp:'+x.id?'<span class="hint">Hapus?</span><button class="btn danger sm" data-act="xdelyes" data-id="'+x.id+'">Ya</button><button class="btn ghost sm" data-act="delno">Batal</button>':'<button class="btn ghost sm danger-t" data-act="xdelask" data-id="'+x.id+'">Hapus</button>')+'</div></li>'}).join('');
+  return '<div class="stack"><div><h3>Pengeluaran</h3><p class="hint">Catat belanja bahan, gaji, listrik, dan biaya lain. Pengeluaran otomatis masuk ke laporan keuangan dan dikurangkan dari pemasukan lunas untuk menghitung laba bersih.</p></div>'+
+    '<div class="two-col">'+form+'<div class="stack"><div class="chips">'+rg.map(function(x){return '<button class="chip" data-act="xrange" data-v="'+x[0]+'" aria-pressed="'+(S.xrange===x[0])+'">'+x[1]+'</button>'}).join('')+'</div>'+
+    '<div class="panel stat bad"><span>Total pengeluaran</span><b class="num">'+rp(tot)+'</b><small>'+list.length+' catatan pada periode ini</small></div>'+
+    (cats.length?'<div class="panel stack"><h3>Per kategori</h3><div class="rank">'+cats.map(function(c){return '<div class="rk"><div class="rk-h"><span>'+esc(c)+'</span><span class="num">'+rp(by[c])+'</span></div><div class="rk-b"><i style="width:'+(by[c]/tot*100)+'%"></i></div></div>'}).join('')+'</div></div>':'')+
+    '</div></div>'+
+    '<div class="panel stack"><h3>Riwayat pengeluaran</h3>'+(rows?'<ul class="ul">'+rows+'</ul>':'<p class="hint">Belum ada pengeluaran pada periode ini.</p>')+'</div></div>';
+}
+
 function viewKeuangan(){
   if(!isOwner())return '';
-  var rg=[['today','Harian '],['7d','Mingguan '],['month','Bulanan '],['custom','Pilih tanggal'],['all','Semua']];
-  if(!S.fdate.from){var tdy=toLocalInput(new Date()).slice(0,10);S.fdate={from:tdy,to:tdy}}
-  var orders=D.orders.filter(function(o){return inRange(o,S.frange)});
-  var paid=orders.filter(function(o){return o.pay.status==='paid'});
-  var waiting=orders.filter(function(o){return o.pay.status==='waiting'});
-  var coll=orders.filter(function(o){return o.pay.status==='collective'});
-  var rev=paid.reduce(function(s,o){return s+otot(o)},0);
-  var wsum=waiting.reduce(function(s,o){return s+otot(o)},0);
-  var csum=coll.reduce(function(s,o){return s+otot(o)},0);
-  var avg=paid.length?rev/paid.length:0;
+  var rg=[['day','Harian'],['7d','Mingguan'],['custom','Bulanan / Pilih tanggal'],['all','Semua']];
+  var t0=new Date(),tdy=ymd(t0);
+  if(!S.fdate.from){S.fdate.from=ymd(new Date(t0.getFullYear(),t0.getMonth(),1));S.fdate.to=tdy}
+  if(!S.fdate.day)S.fdate.day=tdy;
+  var R=repData(S.frange),s=R.sum,orders=R.orders,net=s.paid-s.exp,avg=s.np?s.paid/s.np:0;
   var days=[];
   for(var k=6;k>=0;k--){
     var b=new Date();b=new Date(b.getFullYear(),b.getMonth(),b.getDate()-k);
@@ -1113,29 +1172,38 @@ function viewKeuangan(){
   var chart='<div class="bars" role="img" aria-label="Pemasukan lunas per hari selama 7 hari terakhir">'+days.map(function(d){
     return '<div class="bar"><div class="bar-v num">'+short(d.v)+'</div><div class="bar-col"><div class="bar-fill'+(d.now?' now':'')+'" style="height:'+(d.v?Math.max(4,d.v/max*100):0)+'%"></div></div><div class="bar-l">'+d.wk+'<b class="num">'+d.dt+'</b></div></div>';
   }).join('')+'</div>';
-  var byM={};paid.forEach(function(o){byM[o.pay.method]=(byM[o.pay.method]||0)+otot(o)});
-  var mrows=Object.keys(byM).sort(function(a,b){return byM[b]-byM[a]});
-  var mx=Math.max.apply(null,mrows.map(function(m){return byM[m]}).concat([1]));
   var top={};orders.forEach(function(o){o.items.forEach(function(i){var t=top[i.name]||(top[i.name]={q:0,v:0});t.q+=i.qty;t.v+=i.qty*i.price})});
   var trows=Object.keys(top).sort(function(a,b){return top[b].q-top[a].q}).slice(0,6);
   var tx=Math.max.apply(null,trows.map(function(n){return top[n].q}).concat([1]));
-  var empty=!orders.length;
+  function pr(l,v,bold){return '<li class="ur"><span>'+(bold?'<b>'+l+'</b>':l)+'</span>'+(bold?'<b class="num">':'<span class="num">')+rp(v)+(bold?'</b>':'</span>')+'</li>'}
+  var pay='<div class="panel stack"><h3>Rekap pembayaran</h3><ul class="ul">'+METHODS.map(function(m){return pr(m,R.meth[m]||0)}).join('')+
+    pr('Total uang masuk (lunas)',s.paid,true)+pr('Kolektif (belum dibayar)',s.coll)+pr('Menunggu bayar',s.waiting)+pr('Jumlah keseluruhan penjualan',s.all,true)+'</ul></div>';
+  var xcats=Object.keys(R.xcat).sort(function(a,b){return R.xcat[b]-R.xcat[a]});
+  var expP='<div class="panel stack"><h3>Pengeluaran &amp; laba</h3><ul class="ul">'+
+    pr('Pemasukan lunas',s.paid)+(xcats.length?xcats.map(function(c){return pr('− '+esc(c),R.xcat[c])}).join(''):'')+pr('Total pengeluaran',s.exp,true)+pr('Laba bersih',net,true)+'</ul>'+
+    (s.nx?'':'<p class="hint">Belum ada pengeluaran pada periode ini. Catat di tab Pengeluaran.</p>')+'</div>';
+  var dayTbl='<div class="panel stack"><h3>Rekap per hari</h3><div class="tw"><table class="tbl"><thead><tr><th>Tanggal</th><th>Cash</th><th>QRIS</th><th>Transfer</th><th>Kolektif</th><th>Menunggu</th><th>Total</th><th>Pengeluaran</th></tr></thead><tbody>'+
+    R.days.map(function(g){return '<tr><td>'+esc(fmtDayS(g.d))+'</td><td class="num">'+rp(g.m.Cash)+'</td><td class="num">'+rp(g.m.QRIS)+'</td><td class="num">'+rp(g.m.Transfer)+'</td><td class="num">'+rp(g.coll)+'</td><td class="num">'+rp(g.waiting)+'</td><td class="num">'+rp(g.all)+'</td><td class="num">'+rp(g.exp)+'</td></tr>'}).join('')+
+    '</tbody><tfoot><tr><td>Total</td><td class="num">'+rp(R.meth.Cash||0)+'</td><td class="num">'+rp(R.meth.QRIS||0)+'</td><td class="num">'+rp(R.meth.Transfer||0)+'</td><td class="num">'+rp(s.coll)+'</td><td class="num">'+rp(s.waiting)+'</td><td class="num">'+rp(s.all)+'</td><td class="num">'+rp(s.exp)+'</td></tr></tfoot></table></div></div>';
+  var empty=!orders.length&&!R.exps.length;
   return '<div class="stack"><div class="rep-bar"><div class="chips">'+rg.map(function(x){return '<button class="chip" data-act="frange" data-v="'+x[0]+'" aria-pressed="'+(S.frange===x[0])+'">'+x[1]+'</button>'}).join('')+'</div>'+
     '<div class="rep-act"><button class="btn ghost" data-act="printrep">Cetak laporan</button><button class="btn xl-b" data-act="xlsrep">Unduh Excel</button></div></div>'+
-    (S.frange==='custom'?'<div class="dates panel"><label class="f" for="fd1">Dari tanggal<input class="inp sm" id="fd1" type="date" data-f="fd1" value="'+S.fdate.from+'"></label><label class="f" for="fd2">Sampai tanggal<input class="inp sm" id="fd2" type="date" data-f="fd2" value="'+S.fdate.to+'"></label></div>':'')+
-    '<p class="hint">Cetak dan Excel mengikuti periode yang dipilih: '+esc(rangeLabel(S.frange))+'. Isinya ringkasan keuangan, rekap per hari, dan daftar semua pembelian beserta rincian menu.</p>'+
+    (S.frange==='day'?'<div class="dates panel"><label class="f" for="fd0">Pilih tanggal<input class="inp sm" id="fd0" type="date" data-f="fd0" value="'+S.fdate.day+'"></label></div>':'')+
+    (S.frange==='custom'?'<div class="dates panel"><label class="f" for="fd1">Dari tanggal<input class="inp sm" id="fd1" type="date" data-f="fd1" value="'+S.fdate.from+'"></label><label class="f" for="fd2">Sampai tanggal<input class="inp sm" id="fd2" type="date" data-f="fd2" value="'+S.fdate.to+'"></label>'+
+      '<div class="acts"><button class="btn ghost sm" data-act="fquick" data-v="thismonth">Bulan ini</button><button class="btn ghost sm" data-act="fquick" data-v="lastmonth">Bulan lalu</button></div></div>':'')+
+    '<p class="hint">Cetak dan Excel mengikuti periode yang dipilih: '+esc(rangeLabel(S.frange))+'. Isinya ringkasan keuangan, rekap pembayaran per hari (Cash, QRIS, Transfer, Kolektif), pengeluaran, dan daftar semua pembelian.</p>'+
     '<div class="stats">'+
-      '<div class="panel stat good"><span>Pemasukan (lunas)</span><b class="num">'+rp(rev)+'</b><small>'+paid.length+' pesanan lunas</small></div>'+
-      '<div class="panel stat warn"><span>Menunggu bayar</span><b class="num">'+rp(wsum)+'</b><small>'+waiting.length+' pesanan</small></div>'+
-      '<div class="panel stat coll"><span>Kolektif</span><b class="num">'+rp(csum)+'</b><small>'+coll.length+' pesanan, ditagih bersama</small></div>'+
-      '<div class="panel stat"><span>Total pesanan</span><b class="num">'+orders.length+'</b><small>pada periode ini</small></div>'+
-      '<div class="panel stat"><span>Rata-rata per pesanan</span><b class="num">'+rp(avg)+'</b><small>hanya yang lunas</small></div></div>'+
+      '<div class="panel stat good"><span>Pemasukan (lunas)</span><b class="num">'+rp(s.paid)+'</b><small>'+s.np+' pesanan lunas</small></div>'+
+      '<div class="panel stat warn"><span>Menunggu bayar</span><b class="num">'+rp(s.waiting)+'</b><small>'+s.nw+' pesanan</small></div>'+
+      '<div class="panel stat coll"><span>Kolektif</span><b class="num">'+rp(s.coll)+'</b><small>'+s.nc+' pesanan, ditagih bersama</small></div>'+
+      '<div class="panel stat bad"><span>Pengeluaran</span><b class="num">'+rp(s.exp)+'</b><small>'+s.nx+' catatan</small></div>'+
+      '<div class="panel stat '+(net<0?'bad':'good')+'"><span>Laba bersih</span><b class="num">'+rp(net)+'</b><small>lunas dikurangi pengeluaran</small></div>'+
+      '<div class="panel stat"><span>Total pesanan</span><b class="num">'+s.n+'</b><small>rata-rata lunas '+rp(avg)+'</small></div></div>'+
     '<div class="panel stack"><h3>Pemasukan 7 hari terakhir</h3>'+chart+'</div>'+
-    (empty?'<div class="empty">Belum ada pesanan pada periode ini. Pemasukan muncul setelah pesanan disimpan dan ditandai lunas. Untuk melihat contoh tampilan, buat data contoh di Pengaturan.</div>':
-    '<div class="two-col"><div class="panel stack"><h3>Metode pembayaran</h3>'+
-      (mrows.length?'<div class="rank">'+mrows.map(function(m){return '<div class="rk"><div class="rk-h"><span>'+esc(m)+'</span><span class="num">'+rp(byM[m])+'</span></div><div class="rk-b"><i style="width:'+(byM[m]/mx*100)+'%"></i></div></div>'}).join('')+'</div>':'<p class="hint">Belum ada pembayaran lunas.</p>')+
-      '</div><div class="panel stack"><h3>Menu terlaris</h3><div class="rank">'+
-      trows.map(function(n){return '<div class="rk"><div class="rk-h"><span>'+esc(n)+'</span><span class="num">'+top[n].q+' porsi · '+rp(top[n].v)+'</span></div><div class="rk-b"><i style="width:'+(top[n].q/tx*100)+'%"></i></div></div>'}).join('')+'</div></div></div>')+
+    (empty?'<div class="empty">Belum ada data pada periode ini. Pemasukan muncul setelah pesanan disimpan dan ditandai lunas; pengeluaran dicatat di tab Pengeluaran.</div>':
+    '<div class="two-col">'+pay+expP+'</div>'+dayTbl+
+    '<div class="panel stack"><h3>Menu terlaris</h3><div class="rank">'+
+      trows.map(function(n){return '<div class="rk"><div class="rk-h"><span>'+esc(n)+'</span><span class="num">'+top[n].q+' porsi · '+rp(top[n].v)+'</span></div><div class="rk-b"><i style="width:'+(top[n].q/tx*100)+'%"></i></div></div>'}).join('')+'</div></div>')+
     '</div>';
 }
 
@@ -1250,9 +1318,9 @@ var A={
   closeask:function(){if(!needOwner())return;S.confirm='close';renderView()},
   closeyes:function(){
     if(!needOwner())return;
-    var end=rangeOf('today')[1],cid='c'+uid(),n=0,tot=0;
+    var end=closeEnd(),cid='c'+uid(),n=0,tot=0;
     D.orders.forEach(function(o){if(!o.closed&&new Date(o.ts)<end){o.closed=cid;n++;tot+=otot(o)}});
-    D.closings=D.closings||[];D.closings.push({id:cid,at:new Date().toISOString(),by:me.username,n:n,total:tot});
+    D.closings=D.closings||[];D.closings.push({id:cid,at:new Date().toISOString(),by:me.username,n:n,total:tot,upto:new Date(end.getTime()-1).toISOString()});
     save();S.confirm=null;renderView();toast('Buku ditutup: '+n+' pesanan ('+rp(tot)+') disembunyikan dari kasir, tetap ada di akun pemilik');
   },
   closeundo:function(){
@@ -1263,6 +1331,12 @@ var A={
   printrep:function(){printReport()},
   xlsrep:function(){exportExcel()},
   frange:function(t){if(!needOwner())return;S.frange=t.dataset.v;renderView()},
+  fquick:function(t){if(!needOwner())return;var n=new Date(),y=n.getFullYear(),m=n.getMonth(),a,b;
+    if(t.dataset.v==='lastmonth'){a=new Date(y,m-1,1);b=new Date(y,m,0)}else{a=new Date(y,m,1);b=n}
+    S.fdate.from=ymd(a);S.fdate.to=ymd(b);renderView()},
+  xrange:function(t){if(!needOwner())return;S.xrange=t.dataset.v;S.confirm=null;renderView()},
+  xdelask:function(t){if(!needOwner())return;S.confirm='exp:'+t.dataset.id;renderView()},
+  xdelyes:function(t){if(!needOwner())return;D.expenses=(D.expenses||[]).filter(function(x){return x.id!==t.dataset.id});save();S.confirm=null;renderView();toast('Pengeluaran dihapus')},
   mtoggle:function(t){if(!needOwner())return;var m=D.menu.filter(function(x){return x.id===t.dataset.id})[0];if(m){m.active=!m.active;save();renderView()}},
   medit:function(t){if(!needOwner())return;S.edit=t.dataset.id;renderView()},
   medit0:function(){S.edit=null;renderView()},
@@ -1300,6 +1374,8 @@ document.addEventListener('change',function(e){
   var t=e.target;if(!t.dataset)return;
   if(t.dataset.f==='photo'){if(isOwner())handlePhoto(t);return}
   if(t.dataset.f==='when'){S.f.when=t.value||null;drawCart()}
+  if(t.dataset.f==='cdate'&&isOwner()){S.closeDate=t.value||ymd(new Date());S.confirm=null;renderView();return}
+  if(t.dataset.f==='fd0'&&isOwner()){S.fdate.day=t.value||S.fdate.day;renderView();return}
   if(t.dataset.f==='odate'&&isOwner()){S.of.date=t.value;S.of.range=t.value?'date':'today';renderView()}
   if((t.dataset.f==='fd1'||t.dataset.f==='fd2')&&isOwner()){
     if(t.dataset.f==='fd1'){S.fdate.from=t.value;if(!S.fdate.to||S.fdate.to<t.value)S.fdate.to=t.value}else{S.fdate.to=t.value;if(!S.fdate.from||S.fdate.from>t.value)S.fdate.from=t.value}
@@ -1334,6 +1410,14 @@ document.addEventListener('submit',async function(e){
     renderView();return;
   }
   if(!needOwner())return;
+  if(kind==='addexp'){
+    var xp=String(fd.get('date')||'').split('-'),xn=new Date();
+    var xdt=xp.length===3?new Date(+xp[0],+xp[1]-1,+xp[2],xn.getHours(),xn.getMinutes()):null;
+    var xname=String(fd.get('name')||'').trim(),xamt=parsePrice(fd.get('amount')),xcat=String(fd.get('cat')||'Lain-lain');
+    if(!xdt||isNaN(xdt)||!xname||xamt<=0)S.msg.exp={t:'Isi tanggal, keterangan, dan jumlah lebih dari 0.',ok:false};
+    else{D.expenses=D.expenses||[];D.expenses.push({id:'e'+uid(),ts:xdt.toISOString(),name:xname,cat:xcat,amount:xamt,note:String(fd.get('note')||'').trim(),by:me.username});save();S.msg.exp={t:'Pengeluaran dicatat: '+xname+' ('+rp(xamt)+').',ok:true}}
+    renderView();return;
+  }
   if(kind==='draft'){
     var nm=String(fd.get('name')).trim(),ct=fd.get('cat')==='Minuman'?'Minuman':'Makanan',pr=parsePrice(fd.get('price'));
     if(!nm||pr<=0){S.msg.menu='Kartu belum bisa disimpan: isi nama menu dan harga lebih dari 0.';renderView();return}
