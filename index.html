@@ -1559,14 +1559,15 @@ import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/11.
 import { getDatabase, ref, onValue, set, goOnline, goOffline } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
 import { getAuth, signInAnonymously, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, updatePassword, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
 
-const cfg = {
-  apiKey: "AIzaSyBo6nh7gzNcuC3ElDFBvTA52EAn1H2DiPE",
-  authDomain: "warkopwaras-470ee.firebaseapp.com",
-  databaseURL: "https://warkopwaras-470ee-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "warkopwaras-470ee",
-  storageBucket: "warkopwaras-470ee.firebasestorage.app",
-  messagingSenderId: "201379566984",
-  appId: "1:201379566984:web:8d1ea37ad56bb31f90163d"
+const firebaseConfig = {
+  apiKey: "AIzaSyDcfR9CDngQlPUIBtbMKS1CuLGJoSgLdVk",
+  authDomain: "warkopwaras-d799e.firebaseapp.com",
+  databaseURL: "https://warkopwaras-d799e-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "warkopwaras-d799e",
+  storageBucket: "warkopwaras-d799e.firebasestorage.app",
+  messagingSenderId: "99970337527",
+  appId: "1:99970337527:web:cb8554f8fb709a509c61f2"
+};
 };
 const ROOT = "warkop", COLS = ["users", "menu", "orders", "expenses", "closings"], OBK = "kasir-outbox";
 const B = () => window.KasirBridge;

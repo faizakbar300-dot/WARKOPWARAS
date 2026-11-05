@@ -1,0 +1,10 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "warkop": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}
