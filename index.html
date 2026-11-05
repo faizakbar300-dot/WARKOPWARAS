@@ -672,12 +672,12 @@ function loginHTML(){
     '<ul class="feats"><li>Pesanan lengkap dengan waktu, meja, catatan, dan menu di luar daftar</li><li>Status bayar Menunggu, Kolektif, dan Lunas</li><li>Laporan keuangan khusus pemilik</li></ul></section>'+
     '<section class="auth-card"><div><h2>Masuk</h2><p class="muted" style="margin-top:4px">Gunakan akun pemilik atau karyawan kasir.</p></div>'+
     '<form data-form="login" autocomplete="off">'+
-      '<label class="f" for="lu">Nama pengguna<input class="inp" id="lu" name="u" autocapitalize="none" autocomplete="username" required></label>'+
+      '<label class="f" for="lu">Email<input class="inp" id="lu" name="u" inputmode="email" autocapitalize="none" autocomplete="username" placeholder="nama@email.com" required></label>'+
       '<div class="f2"><label for="lp">Sandi</label><span class="pwrow"><input class="inp" id="lp" name="p" type="password" autocomplete="current-password" required><button type="button" class="pwt" data-act="showpw">Lihat</button></span></div>'+
       '<div class="err" id="lerr" role="alert">'+esc(S.loginErr)+'</div>'+
       '<button class="btn big" type="submit">Masuk</button>'+
     '</form>'+
-    (D&&D.showHint?'<p class="hint">Akun awal: pemilik / 1234 dan kasir / 1234. Pemilik bisa mengganti sandi di Pengaturan.</p>':'')+
+    (D&&D.showHint?'<p class="hint">Pertama kali: masuk dengan pemilik / 1234, lalu buka Pengaturan &rarr; Hubungkan email. Setelah itu login memakai email.</p>':'')+
     '</section></div>';
 }
 function render(){
@@ -1219,16 +1219,17 @@ function viewKeuangan(){
 /* ---------- pengaturan ---------- */
 function msg(k){var t=S.msg[k];return t?'<div class="'+(t.ok?'hint':'err')+'" role="alert">'+esc(t.t)+'</div>':''}
 function viewPengaturan(){
-  var mine='<div class="panel stack"><h3>Ganti sandi saya</h3><form class="stack" data-form="mypw" autocomplete="off">'+
+  var acct='<div class="panel stack"><h3>Akun saya</h3><p class="hint">Masuk dengan: <b>'+esc(me.email||(me.username+' (belum pakai email)'))+'</b></p><form class="stack" data-form="myname" autocomplete="off"><label class="f" for="mn">Nama tampilan<input class="inp" id="mn" name="name" value="'+esc(me.name)+'" required></label><button class="btn" type="submit">Simpan nama</button></form>'+msg('myname')+(me.email?'':'<form class="stack" data-form="bindemail" autocomplete="off"><h3 style="font-size:15px">Hubungkan email untuk login</h3><label class="f" for="be">Email<input class="inp" id="be" name="email" type="email" autocapitalize="none" required></label><label class="f" for="bp">Sandi baru (minimal 6 karakter)<input class="inp" id="bp" name="pw" type="password" autocomplete="new-password" required></label><button class="btn" type="submit">Hubungkan email</button></form>'+msg('bind'))+'</div>';
+  var mine=acct+'<div class="panel stack"><h3>Ganti sandi saya</h3><form class="stack" data-form="mypw" autocomplete="off">'+
     '<label class="f" for="p0">Sandi sekarang<input class="inp" id="p0" name="cur" type="password" autocomplete="current-password" required></label>'+
-    '<label class="f" for="p1">Sandi baru (minimal 4 karakter)<input class="inp" id="p1" name="n1" type="password" autocomplete="new-password" required></label>'+
+    '<label class="f" for="p1">Sandi baru (minimal 6 karakter untuk akun email)<input class="inp" id="p1" name="n1" type="password" autocomplete="new-password" required></label>'+
     '<label class="f" for="p2">Ulangi sandi baru<input class="inp" id="p2" name="n2" type="password" autocomplete="new-password" required></label>'+
     '<button class="btn" type="submit">Simpan sandi</button></form>'+msg('mypw')+'</div>';
   if(!isOwner())return '<div class="two-col">'+mine+'</div>';
   var staff=D.users.filter(function(u){return u.role==='staff'});
   var rows=staff.map(function(u){
     var right;
-    if(S.resetId===u.id)right='<form class="acts" data-form="resetpw" autocomplete="off"><input type="hidden" name="id" value="'+u.id+'"><input class="inp sm" name="pw" type="password" placeholder="Sandi baru" aria-label="Sandi baru untuk '+esc(u.name)+'" style="width:150px" required><button class="btn sm" type="submit">Simpan</button><button class="btn ghost sm" type="button" data-act="ureset0">Batal</button></form>';
+    if(S.resetId===u.id)right='<form class="acts" data-form="resetpw" autocomplete="off"><input type="hidden" name="id" value="'+u.id+'"><input class="inp sm" name="pw" type="password" placeholder="Sandi baru (kosong = kirim email reset)" aria-label="Sandi baru untuk '+esc(u.name)+'" style="width:230px"><button class="btn sm" type="submit">Simpan</button><button class="btn ghost sm" type="button" data-act="ureset0">Batal</button></form>';
     else if(S.confirm==='user:'+u.id)right='<div class="acts"><span class="hint">Hapus akun?</span><button class="btn danger sm" data-act="udelyes" data-id="'+u.id+'">Ya</button><button class="btn ghost sm" data-act="delno">Batal</button></div>';
     else right='<div class="acts"><button class="btn ghost sm" data-act="ureset" data-id="'+u.id+'">Reset sandi</button><button class="btn ghost sm danger-t" data-act="udelask" data-id="'+u.id+'">Hapus</button></div>';
     return '<li class="ur"><div><b>'+esc(u.name)+'</b><div class="hint">'+esc(u.username)+'</div></div>'+right+'</li>';
@@ -1238,8 +1239,8 @@ function viewPengaturan(){
     (rows?'<ul class="ul">'+rows+'</ul>':'<p class="hint">Belum ada akun karyawan.</p>')+
     '<form class="stack" data-form="adduser" autocomplete="off"><h3 style="font-size:15px">Tambah karyawan</h3>'+
       '<label class="f" for="un">Nama<input class="inp" id="un" name="name" required></label>'+
-      '<label class="f" for="uu">Nama pengguna (huruf kecil, tanpa spasi)<input class="inp" id="uu" name="username" autocapitalize="none" required></label>'+
-      '<label class="f" for="up">Sandi awal<input class="inp" id="up" name="pw" type="password" autocomplete="new-password" required></label>'+
+      '<label class="f" for="uu">Email karyawan<input class="inp" id="uu" name="username" type="email" autocapitalize="none" required></label>'+
+      '<label class="f" for="up">Sandi awal (minimal 6 karakter)<input class="inp" id="up" name="pw" type="password" autocomplete="new-password" required></label>'+
       '<button class="btn" type="submit">Tambah karyawan</button></form>'+msg('users')+'</div>';
   var shop='<div class="panel stack"><h3>Nama usaha</h3><form class="stack" data-form="shop" autocomplete="off"><label class="f" for="sn">Tampil di bagian atas aplikasi<input class="inp" id="sn" name="shop" value="'+esc(D.shop)+'" required></label><button class="btn" type="submit">Simpan nama</button></form>'+msg('shop')+'</div>';
   var data='<div class="panel stack"><h3>Cadangan dan data contoh</h3>'+
@@ -1287,7 +1288,7 @@ function makeSamples(){
 var app=$('app');
 var A={
   showpw:function(t){var i=$('lp');if(!i)return;var on=i.type==='password';i.type=on?'text':'password';t.textContent=on?'Sembunyi':'Lihat'},
-  logout:function(){me=null;lsDel(SKEY);S.view='kasir';S.cart=[];S.loginErr='';render()},
+  logout:function(){try{window.KasirAuth&&window.KasirAuth.logout()}catch(e){}me=null;lsDel(SKEY);S.view='kasir';S.cart=[];S.loginErr='';render()},
   nav:function(t){setView(t.dataset.v)},
   cat:function(t){S.cat=t.dataset.v;drawCats();drawGrid()},
   add:function(t){var m=D.menu.filter(function(x){return x.id===t.dataset.id})[0];if(!m||!m.active)return;
@@ -1396,13 +1397,31 @@ document.addEventListener('submit',async function(e){
   e.preventDefault();
   var fd=new FormData(form),kind=form.dataset.form;
   if(kind==='login'){
-    var un=String(fd.get('u')||'').trim().toLowerCase(),p=String(fd.get('p')||'');
-    var u=D.users.filter(function(x){return x.username.toLowerCase()===un})[0];
-    if(u&&u.pw===await pw(u.username,p)){me=u;lsSet(SKEY,u.username);S.loginErr='';S.view='kasir';render()}
-    else{S.loginErr='Nama pengguna atau sandi salah.';$('lerr').textContent=S.loginErr}
+    var un=String(fd.get('u')||'').trim().toLowerCase(),p=String(fd.get('p')||''),u=null;
+    try{
+      if(un.indexOf('@')>0){
+        if(!window.KasirAuth)throw new Error('Layanan login belum siap. Cek internet lalu coba lagi.');
+        await window.KasirAuth.login(un,p);
+        u=D.users.filter(function(x){return (x.email||'').toLowerCase()===un})[0];
+        if(!u){try{await window.KasirAuth.logout()}catch(e){}throw new Error('Email belum terdaftar sebagai pemilik/karyawan.')}
+      }else{
+        u=D.users.filter(function(x){return !x.email&&x.username.toLowerCase()===un})[0];
+        if(!(u&&u.pw===await pw(u.username,p)))throw new Error('Email atau sandi salah.');
+      }
+      me=u;lsSet(SKEY,u.id);S.loginErr='';S.view='kasir';render();
+    }catch(err){S.loginErr=err.message||'Gagal masuk.';$('lerr').textContent=S.loginErr}
     return;
   }
   if(!me)return;
+  if(kind==='myname'){var nm0=String(fd.get('name')||'').trim();if(nm0){me.name=nm0;save();S.msg.myname={t:'Nama diganti.',ok:true}}render();return}
+  if(kind==='bindemail'){
+    var be=String(fd.get('email')||'').trim().toLowerCase(),bp=String(fd.get('pw')||'');
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(be))S.msg.bind={t:'Format email tidak valid.',ok:false};
+    else if(D.users.some(function(x){return (x.email||'').toLowerCase()===be}))S.msg.bind={t:'Email sudah dipakai akun lain.',ok:false};
+    else if(bp.length<6)S.msg.bind={t:'Sandi minimal 6 karakter.',ok:false};
+    else try{await window.KasirAuth.create(be,bp);me.email=be;me.username=be;delete me.pw;if(me.role==='owner')D.showHint=false;save();S.msg.bind={t:'Berhasil. Mulai sekarang login memakai email '+be+'.',ok:true}}catch(err){S.msg.bind={t:err.message,ok:false}}
+    render();return;
+  }
   if(kind==='custom'){
     var name=String(fd.get('name')||'').trim(),price=parsePrice(fd.get('price')),qty=parsePrice(fd.get('qty'));
     if(!name||price<=0||qty<1){toast('Isi nama, harga, dan jumlah dengan benar.');return}
@@ -1412,7 +1431,9 @@ document.addEventListener('submit',async function(e){
   }
   if(kind==='mypw'){
     var cur=String(fd.get('cur')),n1=String(fd.get('n1')),n2=String(fd.get('n2'));
-    if(me.pw!==await pw(me.username,cur))S.msg.mypw={t:'Sandi sekarang salah.',ok:false};
+    if(me.email&&n1===n2&&n1.length>=6){try{await window.KasirAuth.changePw(me.email,cur,n1);S.msg.mypw={t:'Sandi diganti. Pakai sandi baru saat login berikutnya.',ok:true}}catch(err){S.msg.mypw={t:err.message,ok:false}}}
+    else if(me.email)S.msg.mypw={t:n1!==n2?'Ulangan sandi tidak sama.':'Sandi baru minimal 6 karakter.',ok:false};
+    else if(me.pw!==await pw(me.username,cur))S.msg.mypw={t:'Sandi sekarang salah.',ok:false};
     else if(n1.length<4)S.msg.mypw={t:'Sandi baru minimal 4 karakter.',ok:false};
     else if(n1!==n2)S.msg.mypw={t:'Ulangan sandi tidak sama.',ok:false};
     else{me.pw=await pw(me.username,n1);if(me.role==='owner')D.showHint=false;save();S.msg.mypw={t:'Sandi diganti.',ok:true}}
@@ -1449,14 +1470,15 @@ document.addEventListener('submit',async function(e){
   if(kind==='receipt'){D.receipt={addr:String(fd.get('addr')||'').trim(),tel:String(fd.get('tel')||'').trim(),foot:String(fd.get('foot')||'').trim(),paper:fd.get('paper')==='80'?'80':'58',auto:!!fd.get('auto')};save();S.msg.receipt={t:'Pengaturan struk disimpan.',ok:true};renderView();return}
   if(kind==='adduser'){
     var nn=String(fd.get('name')).trim(),us=String(fd.get('username')).trim().toLowerCase(),pwd=String(fd.get('pw'));
-    if(!nn||!/^[a-z0-9._-]{3,20}$/.test(us))S.msg.users={t:'Nama pengguna 3–20 karakter: huruf kecil, angka, titik, strip.',ok:false};
-    else if(pwd.length<4)S.msg.users={t:'Sandi minimal 4 karakter.',ok:false};
-    else if(D.users.some(function(x){return x.username.toLowerCase()===us}))S.msg.users={t:'Nama pengguna sudah dipakai.',ok:false};
-    else{D.users.push({id:'u'+uid(),username:us,name:nn,role:'staff',pw:await pw(us,pwd)});save();S.msg.users={t:'Karyawan ditambahkan. Berikan nama pengguna dan sandi awalnya.',ok:true}}
+    if(!nn||!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(us))S.msg.users={t:'Isi nama dan email yang valid.',ok:false};
+    else if(pwd.length<6)S.msg.users={t:'Sandi minimal 6 karakter.',ok:false};
+    else if(D.users.some(function(x){return (x.email||x.username).toLowerCase()===us}))S.msg.users={t:'Email sudah dipakai.',ok:false};
+    else{try{await window.KasirAuth.create(us,pwd);D.users.push({id:'u'+uid(),username:us,email:us,name:nn,role:'staff'});save();S.msg.users={t:'Karyawan ditambahkan. Berikan email dan sandi awalnya.',ok:true}}catch(err){S.msg.users={t:err.message,ok:false}}}
     renderView();return;
   }
   if(kind==='resetpw'){
     var tu=D.users.filter(function(x){return x.id===fd.get('id')&&x.role==='staff'})[0],np=String(fd.get('pw'));
+    if(tu&&tu.email){try{await window.KasirAuth.resetMail(tu.email);S.resetId=null;S.msg.users={t:'Email reset sandi dikirim ke '+tu.email+'.',ok:true}}catch(err){S.msg.users={t:err.message,ok:false}}renderView();return}
     if(tu&&np.length>=4){tu.pw=await pw(tu.username,np);save();S.resetId=null;S.msg.users={t:'Sandi '+tu.name+' diganti.',ok:true}}
     else S.msg.users={t:'Sandi baru minimal 4 karakter.',ok:false};
     renderView();return;
@@ -1526,18 +1548,18 @@ window.KasirBridge={
   if(!D)D=await seed();
   save();
   var sn=lsGet(SKEY);
-  if(sn)me=D.users.filter(function(x){return x.username===sn})[0]||null;
+  if(sn)me=D.users.filter(function(x){return x.id===sn||x.username===sn})[0]||null;
   render();
   readyRes();
 })();
 })();
 </script>
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
-import { getDatabase, ref, onValue, update } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-database.js";
-import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
+import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+import { getDatabase, ref, onValue, set, goOnline, goOffline } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
+import { getAuth, signInAnonymously, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, updatePassword, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
 
-const firebaseConfig = {
+const cfg = {
   apiKey: "AIzaSyBo6nh7gzNcuC3ElDFBvTA52EAn1H2DiPE",
   authDomain: "warkopwaras-470ee.firebaseapp.com",
   databaseURL: "https://warkopwaras-470ee-default-rtdb.asia-southeast1.firebasedatabase.app",
@@ -1546,88 +1568,152 @@ const firebaseConfig = {
   messagingSenderId: "201379566984",
   appId: "1:201379566984:web:8d1ea37ad56bb31f90163d"
 };
-
-const ROOT = "warkop";
-const COLS = ["users", "menu", "orders", "expenses", "closings"];
+const ROOT = "warkop", COLS = ["users", "menu", "orders", "expenses", "closings"], OBK = "kasir-outbox";
 const B = () => window.KasirBridge;
 const setSt = (t, c) => { try { B() && B().setStatus(t, c); } catch (e) {} };
+const ls = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
 
-let last = {};
-let started = false;
+/* antrean tulis: perubahan yang belum terkirim disimpan di perangkat, tetap aman walau offline / ditutup */
+let outbox = {};
+try { outbox = JSON.parse(ls.get(OBK) || "{}") || {}; } catch (e) {}
+const saveOb = () => ls.set(OBK, JSON.stringify(outbox));
+const pend = () => Object.keys(outbox).length;
 
-/* data aplikasi -> peta {path: teks JSON}; tiap item disimpan sendiri agar
-   perubahan dari beberapa perangkat tidak saling menimpa */
+let last = {}, started = false, connected = false, listening = false, errMsg = "";
+const inflight = new Set();
+
 function flatten(d) {
   const m = {};
   COLS.forEach(c => (d[c] || []).forEach(it => { if (it && it.id) m[c + "/" + it.id] = JSON.stringify(it); }));
   m["meta"] = JSON.stringify({ shop: d.shop, seq: d.seq, receipt: d.receipt, showHint: d.showHint, v: d.v });
   return m;
 }
+function rawFlat(v) {
+  const m = {};
+  COLS.forEach(c => Object.keys(v[c] || {}).forEach(id => { m[c + "/" + id] = v[c][id]; }));
+  m.meta = v.meta;
+  return m;
+}
+function unflat(f) {
+  const v = {};
+  Object.keys(f).forEach(k => { const p = k.split("/"); if (p.length === 1) v[k] = f[k]; else (v[p[0]] = v[p[0]] || {})[p[1]] = f[k]; });
+  return v;
+}
 function build(v) {
   const d = {};
-  COLS.forEach(c => {
-    d[c] = Object.values(v[c] || {}).map(s => { try { return JSON.parse(s); } catch (e) { return null; } }).filter(Boolean);
-  });
+  COLS.forEach(c => { d[c] = Object.values(v[c] || {}).map(s => { try { return JSON.parse(s); } catch (e) { return null; } }).filter(Boolean); });
   Object.assign(d, JSON.parse(v.meta));
   return d;
 }
-function same(a, b) {
-  const ka = Object.keys(a), kb = Object.keys(b);
-  return ka.length === kb.length && ka.every(k => a[k] === b[k]);
+function effective(v) {  /* data cloud + perubahan lokal yang belum terkirim */
+  const f = rawFlat(v);
+  Object.keys(outbox).forEach(k => { if (outbox[k] === null) delete f[k]; else f[k] = outbox[k]; });
+  return f;
 }
+function same(a, b) { const ka = Object.keys(a), kb = Object.keys(b); return ka.length === kb.length && ka.every(k => a[k] === b[k]); }
 
-try {
-  const fbApp = initializeApp(firebaseConfig);
-  const db = getDatabase(fbApp);
+const app = initializeApp(cfg), db = getDatabase(app), auth = getAuth(app);
 
-  try { await signInAnonymously(getAuth(fbApp)); }
-  catch (e) { console.warn("Login anonim Firebase gagal (aktifkan Anonymous di Authentication, atau pakai rules terbuka):", e.code || e); }
-
-  function push(d) {
-    if (!d) return;
-    const flat = flatten(d), up = {};
-    Object.keys(flat).forEach(k => { if (last[k] !== flat[k]) up[ROOT + "/" + k] = flat[k]; });
-    Object.keys(last).forEach(k => { if (!(k in flat)) up[ROOT + "/" + k] = null; });
-    if (!Object.keys(up).length) return;
-    const prev = last;
-    last = flat;
-    update(ref(db), up).catch(e => { last = prev; setSt("Gagal simpan ke cloud: " + (e.code || e.message), "bad"); });
-  }
-  window.KasirSync = { push };
-
-  onValue(ref(db, ".info/connected"), s => {
-    if (s.val()) setSt("Tersinkron", "ok");
-    else setSt("Offline · data disimpan di perangkat", "warn");
+function status() {
+  if (!connected) setSt(pend() ? "Offline · " + pend() + " perubahan menunggu dikirim" : "Offline · mencoba menyambung…", "warn");
+  else if (errMsg && !started) setSt(errMsg, "bad");
+  else if (!started) setSt("Mengambil data…", "warn");
+  else setSt(pend() ? "Mengirim " + pend() + " perubahan…" : "Tersinkron", pend() ? "warn" : "ok");
+}
+function flush() {
+  if (!auth.currentUser) return;
+  Object.keys(outbox).forEach(k => {
+    const val = outbox[k], id = k + "|" + val;
+    if (inflight.has(id)) return;
+    inflight.add(id);
+    set(ref(db, ROOT + "/" + k), val)
+      .then(() => { if (outbox[k] === val) { delete outbox[k]; saveOb(); } })
+      .catch(e => { if (e && /permission/i.test(e.code || e.message)) { if (outbox[k] === val) { delete outbox[k]; saveOb(); } errMsg = "Ditolak aturan Firebase (cek Rules)"; } })
+      .finally(() => { inflight.delete(id); status(); });
   });
+}
+function push(d) {
+  if (!d) return;
+  const flat = flatten(d);
+  Object.keys(flat).forEach(k => { if (last[k] !== flat[k]) outbox[k] = flat[k]; });
+  Object.keys(last).forEach(k => { if (!(k in flat)) outbox[k] = null; });
+  last = flat; saveOb(); flush(); status();
+}
+window.KasirSync = { push };
 
+function listen() {
+  if (listening) return;
+  listening = true;
   onValue(ref(db, ROOT), async snap => {
     const v = snap.val();
     await B().ready;
+    errMsg = "";
     if (!v || !v.meta) {
-      /* cloud masih kosong: unggah data perangkat ini sebagai data awal */
-      if (!started) { started = true; push(B().getD()); B().markSynced(); setSt("Tersinkron", "ok"); }
-      return;
+      if (!started) { started = true; last = {}; push(B().getD()); B().markSynced(); }
+      status(); return;
     }
-    let remote;
-    try { remote = build(v); } catch (e) { setSt("Data cloud tidak terbaca", "bad"); return; }
-    const flat = flatten(remote);
+    let f;
+    try { f = effective(v); build(unflat(f)); } catch (e) { errMsg = "Data cloud tidak terbaca"; status(); return; }
     if (!started) {
       started = true;
-      last = flat;
+      const remote = build(unflat(f));
+      last = flatten(remote);
       const merged = B().firstSync(remote);
       B().apply(merged);
       push(merged);
-      setSt("Tersinkron", "ok");
-      return;
+    } else {
+      if (same(f, last)) { status(); return; }
+      last = f;
+      B().apply(build(unflat(f)));
     }
-    if (same(flat, last)) return;
-    last = flat;
-    B().apply(remote);
-    setSt("Tersinkron", "ok");
-  }, err => setSt("Sinkron gagal: " + (err.code || err.message) + ". Cek rules Firebase.", "bad"));
-} catch (e) {
-  console.error(e);
-  setSt("Firebase tidak aktif", "bad");
+    flush(); status();
+  }, err => {
+    listening = false;
+    errMsg = "Sinkron gagal: " + (err.code || err.message) + ". Mencoba lagi…";
+    status(); setTimeout(listen, 5000);
+  });
 }
+
+/* koneksi: jaga tetap aktif */
+onValue(ref(db, ".info/connected"), s => { connected = !!s.val(); if (connected) flush(); status(); });
+const kick = () => { try { goOffline(); goOnline(); } catch (e) {} };
+addEventListener("online", kick);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { if (!connected) kick(); flush(); } });
+setInterval(() => {
+  if (!auth.currentUser) signInAnonymously(auth).catch(() => {});
+  if (!connected) kick(); else flush();
+  status();
+}, 15000);
+
+/* login cloud: tanpa akun email dipakai sesi anonim agar data tetap tersinkron */
+onAuthStateChanged(auth, u => {
+  if (!u) { signInAnonymously(auth).catch(e => { errMsg = "Login cloud gagal (" + (e.code || e.message) + "). Aktifkan Anonymous di Firebase Authentication."; status(); }); return; }
+  listen(); flush();
+});
+
+const MSG = {
+  "auth/invalid-credential": "Email atau sandi salah.", "auth/wrong-password": "Email atau sandi salah.", "auth/user-not-found": "Email atau sandi salah.",
+  "auth/invalid-email": "Format email tidak valid.", "auth/network-request-failed": "Tidak ada koneksi internet.",
+  "auth/email-already-in-use": "Email sudah terdaftar di Firebase.", "auth/weak-password": "Sandi minimal 6 karakter.",
+  "auth/operation-not-allowed": "Aktifkan Email/Password di Firebase Authentication.", "auth/too-many-requests": "Terlalu banyak percobaan, coba lagi nanti.",
+  "auth/requires-recent-login": "Sesi habis. Keluar lalu masuk lagi, kemudian coba lagi."
+};
+const wrap = async f => { try { return await f(); } catch (e) { throw new Error(MSG[e.code] || ("Gagal: " + (e.code || e.message))); } };
+window.KasirAuth = {
+  login: (e, p) => wrap(() => signInWithEmailAndPassword(auth, e, p)),
+  logout: () => wrap(() => signOut(auth)),
+  changePw: (e, cur, nw) => wrap(async () => {
+    const u = auth.currentUser;
+    if (!u || !u.email) throw { code: "auth/requires-recent-login" };
+    await reauthenticateWithCredential(u, EmailAuthProvider.credential(e, cur));
+    await updatePassword(u, nw);
+  }),
+  create: (e, p) => wrap(async () => {   /* app kedua agar sesi yang sedang login tidak berganti */
+    const sec = initializeApp(cfg, "sec" + Date.now());
+    try { await createUserWithEmailAndPassword(getAuth(sec), e, p); } finally { await deleteApp(sec); }
+  }),
+  resetMail: e => wrap(() => sendPasswordResetEmail(auth, e))
+};
+status();
 </script>
 </body></html>
