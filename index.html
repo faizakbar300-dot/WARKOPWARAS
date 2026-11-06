@@ -1568,7 +1568,7 @@ const firebaseConfig = {
   messagingSenderId: "99970337527",
   appId: "1:99970337527:web:cb8554f8fb709a509c61f2"
 };
-};
+const cfg = firebaseConfig;
 const ROOT = "warkop", COLS = ["users", "menu", "orders", "expenses", "closings"], OBK = "kasir-outbox";
 const B = () => window.KasirBridge;
 const setSt = (t, c) => { try { B() && B().setStatus(t, c); } catch (e) {} };
