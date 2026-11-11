@@ -471,6 +471,9 @@ h1,h2,h3{font-weight:700}
 .syncst.ok::before{background:#7CFF8A}
 .syncst.bad::before{background:#FF7A70}
 .syncst.warn::before{background:#FFB81F}
+.tbl td.l,.tbl th.l{text-align:left;white-space:normal;min-width:90px}
+.tbl td.pos{color:var(--good);font-weight:700}
+.tbl td.neg{color:var(--bad);font-weight:700}
 </style>
 
 </head><body>
@@ -631,7 +634,7 @@ var D=null, me=null;
 var S={view:'kasir',q:'',cat:'Semua',cart:[],mq:'',sort:'menu',showDetail:true,showCustom:false,paySheet:false,
   f:{customer:'',table:'',note:'',when:null,pay:'waiting',method:'Cash',svc:'Makan di tempat'},
   of:{range:'all',status:'all',q:'',date:''},fdate:{from:'',to:''},last:null,drafts:[],
-  payingId:null,confirm:null,edit:null,resetId:null,frange:'day',xrange:'today',closeDate:'',backupText:null,msg:{},loginErr:''};
+  payingId:null,eo:null,confirm:null,edit:null,resetId:null,frange:'day',xrange:'today',closeDate:'',backupText:null,msg:{},loginErr:''};
 var toastT=null;
 
 function isOwner(){return !!me&&me.role==='owner'}
@@ -695,7 +698,7 @@ function tick(){var c=$('clock');if(c){var d=new Date();c.textContent=fmtDay(d)+
 setInterval(tick,20000);
 function setView(v){
   if(allowed().indexOf(v)<0)return;
-  S.view=v;S.confirm=null;S.payingId=null;S.edit=null;S.resetId=null;S.backupText=null;S.msg={};
+  S.view=v;S.confirm=null;S.payingId=null;S.eo=null;S.edit=null;S.resetId=null;S.backupText=null;S.msg={};
   document.querySelectorAll('.tab').forEach(function(b){if(b.dataset.v===v)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
   renderView();window.scrollTo(0,0);
 }
@@ -842,7 +845,7 @@ function saveOrder(status){
   var paid=status==='paid';
   var o={id:'o'+uid(),no:D.seq,ts:when.toISOString(),customer:S.f.customer.trim(),table:S.f.table.trim(),note:S.f.note.trim(),svc:S.f.svc,
     items:S.cart.map(function(i){return {name:i.name,price:i.price,qty:i.qty,note:i.note.trim(),custom:i.custom}}),
-    pay:paid?{status:'paid',method:S.f.method,at:new Date().toISOString()}:{status:status},by:me.username};
+    pay:paid?{status:'paid',method:S.f.method,at:new Date().toISOString()}:{status:status},coll:status==='collective',by:me.username};
   D.orders.push(o);save();
   S.cart=[];S.paySheet=false;S.last=o.id;
   S.f={customer:'',table:'',note:'',when:null,pay:'waiting',method:S.f.method,svc:S.f.svc};
@@ -900,7 +903,7 @@ function lastBox(){
   var o=S.last&&D.orders.filter(function(x){return x.id===S.last})[0];if(!o)return '';
   return '<div class="lastbox"><span>Pesanan '+num(o.no)+' tersimpan</span><span class="acts"><button class="btn sm" data-act="printrc" data-id="'+o.id+'">Cetak struk</button><button class="btn ghost sm" data-act="lastx" aria-label="Tutup">✕</button></span></div>';
 }
-function visibleOrder(o){return isOwner()||(!o.closed&&inRange(o,'today'))}
+function visibleOrder(o){return isOwner()||!o.closed}
 
 /* ---------- tutup buku ---------- */
 function closeEnd(){
@@ -924,8 +927,8 @@ function bookPanel(){
 
 /* ---------- pesanan ---------- */
 function viewPesanan(){
-  var rg=isOwner()?[['today','Hari ini'],['7d','7 hari'],['month','Bulan ini'],['all','Semua']]:[['today','Hari ini']];
-  if(!isOwner())S.of.range='today';
+  var rg=isOwner()?[['today','Hari ini'],['7d','7 hari'],['month','Bulan ini'],['all','Semua']]:[['all','Semua (sampai tutup buku)']];
+  if(!isOwner())S.of.range='all';
   var dpick=isOwner()?'<label class="f" for="od">Lihat tanggal tertentu<input class="inp sm" id="od" type="date" data-f="odate" value="'+esc(S.of.date)+'"></label>':'';
   var st=[['all','Semua'],['waiting','Menunggu'],['collective','Kolektif'],['paid','Lunas']];
   function chips(list,key,cur){return '<div class="chips">'+list.map(function(x){return '<button class="chip" data-act="'+key+'" data-v="'+x[0]+'" aria-pressed="'+(cur===x[0])+'">'+x[1]+'</button>'}).join('')+'</div>'}
@@ -943,8 +946,37 @@ function drawOrders(){
   s.textContent=list.length+' pesanan'+(un?' · belum lunas '+rp(un):'');
   l.innerHTML=list.length?list.map(orderCard).join(''):'<div class="empty" style="grid-column:1/-1">Belum ada pesanan pada pilihan ini. Buat pesanan baru di tab Kasir.</div>';
 }
+function canEdit(o){return isOwner()||o.pay.status!=='paid'}
+function isColl(o){return !!o.coll||o.pay.status==='collective'}
+function eoChoices(){var L=[];D.menu.forEach(function(m){if(!m.active)return;if(m.variants)m.variants.forEach(function(v){L.push({name:m.name+' ('+v.label+')',price:v.price})});else L.push({name:m.name,price:m.price})});return L}
+function eoTotal(){return S.eo.items.reduce(function(t,i){return t+i.price*i.qty},0)}
+function eoPut(name,price,qty,custom){
+  var it=S.eo.items.filter(function(i){return i.name===name&&i.price===price})[0];
+  if(it)it.qty+=qty;else S.eo.items.push({name:name,price:price,qty:qty,note:'',custom:!!custom});
+}
+function editCard(o,d){
+  var E=S.eo,ch=eoChoices();
+  var rows=E.items.map(function(i,x){
+    return '<li class="ci"><div class="ci-top"><span class="ci-name">'+esc(i.name)+(i.custom?'<span class="tag">di luar menu</span>':'')+'</span><span class="num">'+rp(i.price*i.qty)+'</span></div>'+
+      '<div class="ci-ctl"><div class="qty"><button type="button" data-act="eodec" data-i="'+x+'" aria-label="Kurangi">−</button><span class="num">'+i.qty+'</span><button type="button" data-act="eoinc" data-i="'+x+'" aria-label="Tambah">+</button></div>'+
+      '<input class="inp sm ci-note" data-f="eonote" data-i="'+x+'" placeholder="Catatan item" value="'+esc(i.note)+'" aria-label="Catatan untuk '+esc(i.name)+'"></div>'+
+      '<div class="acts"><button type="button" class="btn ghost sm danger-t" data-act="eodel" data-i="'+x+'">Hapus item</button></div></li>';
+  }).join('');
+  return '<article class="panel oc"><div class="oc-h"><div><b>Ubah pesanan '+num(o.no)+'</b> <span class="muted">'+(o.customer?'· '+esc(o.customer):'')+(o.table?' · Meja '+esc(o.table):'')+'</span><div class="oc-t">'+fmtDay(d)+' · pukul '+fmtTime(d)+'</div></div></div>'+
+    (o.pay.status==='paid'?'<div class="onote">Pesanan ini sudah lunas. Total baru akan mengubah pemasukan di laporan.</div>':'')+
+    '<ul class="cl">'+(rows||'<li class="hint">Belum ada item. Tambahkan menu di bawah.</li>')+'</ul>'+
+    '<div class="cform"><label class="f" for="eosel">Tambah menu<select class="inp sm" id="eosel">'+ch.map(function(c,i){return '<option value="'+i+'">'+esc(c.name)+' — '+rp(c.price)+'</option>'}).join('')+'</select></label>'+
+    '<button type="button" class="btn sm" data-act="eoadd"'+(ch.length?'':' disabled')+'>+ Tambah ke pesanan</button></div>'+
+    '<form class="cform" data-form="eocustom" autocomplete="off"><b>Tambah di luar menu</b>'+
+    '<label class="f">Nama<input class="inp sm" name="name" placeholder="mis. Telur ceplok" required></label>'+
+    '<div class="two"><label class="f">Harga (Rp)<input class="inp sm" name="price" inputmode="numeric" required></label><label class="f">Jumlah<input class="inp sm" name="qty" inputmode="numeric" value="1" required></label></div>'+
+    '<button class="btn ghost sm" type="submit">Tambah</button></form>'+
+    '<div class="total"><span>Total baru</span><b class="num">'+rp(eoTotal())+'</b></div>'+
+    '<div class="acts"><button class="btn sm" data-act="eosave">Simpan perubahan</button><button class="btn ghost sm" data-act="eocancel">Batal</button></div></article>';
+}
 function orderCard(o){
   var d=new Date(o.ts),paid=o.pay.status==='paid',act='';
+  if(S.eo&&S.eo.id===o.id)return editCard(o,d);
   if(!paid){
     act=S.payingId===o.id
       ?'<span class="hint">Bayar dengan:</span>'+METHODS.map(function(m){return '<button class="btn sm" data-act="setpaid" data-id="'+o.id+'" data-v="'+m+'">'+m+'</button>'}).join('')+'<button class="btn ghost sm" data-act="paycancel">Batal</button>'
@@ -957,8 +989,8 @@ function orderCard(o){
       ?'<span class="hint">Hapus pesanan ini?</span><button class="btn danger sm" data-act="delyes" data-id="'+o.id+'">Ya, hapus</button><button class="btn ghost sm" data-act="delno">Batal</button>'
       :'<button class="btn ghost sm danger-t" data-act="delask" data-id="'+o.id+'">Hapus</button>';
   }
-  act='<button class="btn ghost sm" data-act="printrc" data-id="'+o.id+'">Cetak struk</button>'+act;
-  return '<article class="panel oc"><div class="oc-h"><div><b>'+num(o.no)+'</b> <span class="muted">'+(o.table?'· Meja '+esc(o.table):'')+(o.customer?' · '+esc(o.customer):'')+'</span>'+(o.sample?'<span class="tag">contoh</span>':'')+(isOwner()&&o.closed?'<span class="tag">buku ditutup</span>':'')+
+  act=(canEdit(o)?'<button class="btn ghost sm" data-act="eoopen" data-id="'+o.id+'">Ubah pesanan</button>':'')+'<button class="btn ghost sm" data-act="printrc" data-id="'+o.id+'">Cetak struk</button>'+act;
+  return '<article class="panel oc"><div class="oc-h"><div><b>'+num(o.no)+'</b> <span class="muted">'+(o.table?'· Meja '+esc(o.table):'')+(o.customer?' · '+esc(o.customer):'')+'</span>'+(o.sample?'<span class="tag">contoh</span>':'')+(o.edited?'<span class="tag">diubah</span>':'')+(isOwner()&&o.closed?'<span class="tag">buku ditutup</span>':'')+
     '<div class="oc-t">'+fmtDay(d)+' · pukul '+fmtTime(d)+(o.svc?' · '+esc(o.svc):'')+'</div></div>'+
     '<span class="pill '+o.pay.status+'">'+(paid?'Lunas · '+esc(o.pay.method):ST[o.pay.status])+'</span></div>'+
     '<ul>'+o.items.map(function(i){return '<li><span>'+i.qty+' × '+esc(i.name)+(i.custom?'<span class="tag">di luar menu</span>':'')+(i.note?'<small>'+esc(i.note)+'</small>':'')+'</span><span class="num">'+rp(i.price*i.qty)+'</span></li>'}).join('')+'</ul>'+
@@ -1060,17 +1092,20 @@ function repData(k){
   var sum={n:orders.length,paid:0,waiting:0,coll:0,np:0,nw:0,nc:0,all:0,exp:0,nx:exps.length};
   var days={},meth={},xcat={};
   METHODS.forEach(function(m){meth[m]=0});
-  function dg(ts){var d=new Date(ts),key=ymd(d);return days[key]||(days[key]={d:new Date(d.getFullYear(),d.getMonth(),d.getDate()),n:0,paid:0,waiting:0,coll:0,all:0,exp:0,m:{Cash:0,QRIS:0,Transfer:0}})}
+  function dg(ts){var d=new Date(ts),key=ymd(d);return days[key]||(days[key]={d:new Date(d.getFullYear(),d.getMonth(),d.getDate()),n:0,cp:0,paid:0,waiting:0,coll:0,all:0,exp:0,m:{Cash:0,QRIS:0,Transfer:0}})}
   orders.forEach(function(o){
     var t=otot(o),g=dg(o.ts);
     g.n++;g.all+=t;sum.all+=t;
-    if(o.pay.status==='paid'){sum.paid+=t;sum.np++;g.paid+=t;meth[o.pay.method]=(meth[o.pay.method]||0)+t;g.m[o.pay.method]=(g.m[o.pay.method]||0)+t}
+    if(o.pay.status==='paid'){sum.paid+=t;sum.np++;g.paid+=t;if(isColl(o))g.cp+=t;meth[o.pay.method]=(meth[o.pay.method]||0)+t;g.m[o.pay.method]=(g.m[o.pay.method]||0)+t}
     else if(o.pay.status==='collective'){sum.coll+=t;sum.nc++;g.coll+=t}
     else{sum.waiting+=t;sum.nw++;g.waiting+=t}
   });
   exps.forEach(function(x){var g=dg(x.ts);g.exp+=x.amount;sum.exp+=x.amount;xcat[x.cat]=(xcat[x.cat]||0)+x.amount});
   var dl=Object.keys(days).sort().map(function(x){return days[x]});
-  return {orders:orders,exps:exps,sum:sum,days:dl,meth:meth,xcat:xcat};
+  var coll=orders.filter(isColl),cm={};METHODS.forEach(function(m){cm[m]=0});
+  sum.cn=coll.length;sum.cPaid=0;sum.cOpen=0;
+  coll.forEach(function(o){var t=otot(o);if(o.pay.status==='paid'){sum.cPaid+=t;cm[o.pay.method]=(cm[o.pay.method]||0)+t}else sum.cOpen+=t});
+  return {orders:orders,exps:exps,sum:sum,days:dl,meth:meth,xcat:xcat,coll:coll,cmeth:cm};
 }
 function payText(o){return o.pay.status==='paid'?'Lunas ('+o.pay.method+')':ST[o.pay.status]}
 function itemsText(o){return o.items.map(function(i){return i.qty+'x '+i.name+(i.note?' ['+i.note+']':'')}).join('; ')}
@@ -1086,6 +1121,7 @@ function printReport(){
     METHODS.map(function(m){return '<tr><td>Pemasukan '+esc(m)+'</td><td class="r">'+rp(R.meth[m]||0)+'</td></tr>'}).join('')+
     '<tr><td>Total uang masuk (lunas)</td><td class="r">'+rp(s.paid)+' ('+s.np+' pesanan)</td></tr>'+
     '<tr><td>Kolektif (belum dibayar)</td><td class="r">'+rp(s.coll)+' ('+s.nc+' pesanan)</td></tr>'+
+    '<tr><td>Kolektif sudah lunas (sudah masuk ke total lunas)</td><td class="r">'+rp(s.cPaid)+' ('+(s.cn-s.nc)+' pesanan)</td></tr>'+
     '<tr><td>Menunggu bayar</td><td class="r">'+rp(s.waiting)+' ('+s.nw+' pesanan)</td></tr>'+
     '<tr><td>Jumlah keseluruhan penjualan</td><td class="r">'+rp(s.all)+' ('+s.n+' pesanan)</td></tr>'+
     '<tr><td>Total pengeluaran</td><td class="r">'+rp(s.exp)+' ('+s.nx+' catatan)</td></tr>'+
@@ -1098,6 +1134,9 @@ function printReport(){
     '<h2>Daftar pengeluaran</h2><table><thead><tr><th>Tanggal</th><th>Kategori</th><th>Keterangan</th><th class="r">Jumlah</th></tr></thead><tbody>'+
     (R.exps.length?R.exps.map(function(x){var d=new Date(x.ts);return '<tr><td>'+esc(fmtDayS(d))+'</td><td>'+esc(x.cat)+'</td><td>'+esc(x.name)+(x.note?' ('+esc(x.note)+')':'')+'</td><td class="r">'+rp(x.amount)+'</td></tr>'}).join(''):'<tr><td colspan="4">Tidak ada pengeluaran.</td></tr>')+
     '</tbody><tfoot><tr><td colspan="3">Total pengeluaran</td><td class="r">'+rp(s.exp)+'</td></tr></tfoot></table>'+
+    '<h2>Tabel kolektif</h2><table><thead><tr><th>No</th><th>Tanggal</th><th>Pemesan</th><th>Pesanan</th><th>Status</th><th class="r">Total</th></tr></thead><tbody>'+
+    (R.coll.length?R.coll.map(function(o){var d=new Date(o.ts);return '<tr><td>'+num(o.no)+'</td><td>'+esc(fmtDayS(d))+'</td><td>'+esc(o.customer||'-')+'</td><td>'+esc(itemsText(o))+'</td><td>'+(o.pay.status==='paid'?'Lunas ('+esc(o.pay.method)+')':'Belum dibayar')+'</td><td class="r">'+rp(otot(o))+'</td></tr>'}).join(''):'<tr><td colspan="6">Tidak ada pesanan kolektif.</td></tr>')+
+    '</tbody><tfoot><tr><td colspan="5">Belum dibayar '+rp(s.cOpen)+' · Sudah lunas '+rp(s.cPaid)+'</td><td class="r">'+rp(s.cOpen+s.cPaid)+'</td></tr></tfoot></table>'+
     '<h2>Daftar pembelian</h2><table><thead><tr><th>No</th><th>Waktu</th><th>Pemesan / Meja</th><th>Pesanan</th><th>Status</th><th class="r">Total</th></tr></thead><tbody>'+
     (R.orders.length?R.orders.map(function(o){var d=new Date(o.ts);return '<tr><td>'+num(o.no)+'</td><td>'+esc(fmtDayS(d))+'<br>'+fmtTime(d)+'</td><td>'+esc(o.customer||'-')+(o.table?' / Meja '+esc(o.table):'')+'<br>'+esc(o.svc||'')+'</td><td>'+esc(itemsText(o))+(o.note?'<br><i>'+esc(o.note)+'</i>':'')+'</td><td>'+esc(payText(o))+'</td><td class="r">'+rp(otot(o))+'</td></tr>'}).join(''):'<tr><td colspan="6">Tidak ada pesanan.</td></tr>')+
     '</tbody><tfoot><tr><td colspan="5">Total</td><td class="r">'+rp(s.all)+'</td></tr></tfoot></table>';
@@ -1121,7 +1160,7 @@ function exportExcel(){
   var sum=[xrow(['Laporan Keuangan & Pembelian — '+D.shop],'t'),xrow(['Periode',rangeLabel(k)]),xrow(['Dibuat',fmtDayS(now)+' '+fmtTime(now)+' oleh '+me.name]),xrow([]),
     xrow(['Keterangan','Jumlah pesanan','Nominal (Rp)'],'h')]
     .concat(METHODS.map(function(m){return xrow(['Pemasukan '+m,'',R.meth[m]||0])}))
-    .concat([xrow(['Total uang masuk (lunas)',s.np,s.paid],'b'),xrow(['Kolektif (belum dibayar)',s.nc,s.coll]),xrow(['Menunggu bayar',s.nw,s.waiting]),
+    .concat([xrow(['Total uang masuk (lunas)',s.np,s.paid],'b'),xrow(['Kolektif (belum dibayar)',s.nc,s.coll]),xrow(['Kolektif sudah lunas (masuk ke total lunas)',s.cn-s.nc,s.cPaid]),xrow(['Menunggu bayar',s.nw,s.waiting]),
       xrow(['Jumlah keseluruhan penjualan',s.n,s.all],'b'),xrow(['Total pengeluaran',s.nx,s.exp]),xrow(['Laba bersih (lunas dikurangi pengeluaran)','',net],'b'),
       xrow(['Rata-rata per pesanan lunas','',Math.round(s.np?s.paid/s.np:0)])]);
   var dayRows=[xrow(['Tanggal','Pesanan','Cash (Rp)','QRIS (Rp)','Transfer (Rp)','Total lunas (Rp)','Kolektif (Rp)','Menunggu (Rp)','Total penjualan (Rp)','Pengeluaran (Rp)','Lunas - Pengeluaran (Rp)'],'h')]
@@ -1136,6 +1175,9 @@ function exportExcel(){
   var itRows=[xrow(['No pesanan','Tanggal','Jam','Pemesan','Menu','Catatan','Jumlah','Harga satuan (Rp)','Subtotal (Rp)','Status'],'h')],tq=0;
   R.orders.forEach(function(o){var d=new Date(o.ts);o.items.forEach(function(i){tq+=i.qty;itRows.push(xrow([num(o.no),fmtDayS(d),fmtTime(d),o.customer||'',i.name+(i.custom?' (di luar menu)':''),i.note||'',i.qty,i.price,i.price*i.qty,ST[o.pay.status]]))})});
   itRows.push(xrow(['Total','','','','','',tq,'',s.all,''],'b'));
+  var colRows=[xrow(['No','Tanggal','Jam','Pemesan','Pesanan','Status','Metode','Dilunasi pada','Total (Rp)'],'h')]
+    .concat(R.coll.map(function(o){var d=new Date(o.ts),pd=o.pay.at?new Date(o.pay.at):null;return xrow([num(o.no),fmtDayS(d),fmtTime(d),o.customer||'',itemsText(o),o.pay.status==='paid'?'Lunas':'Belum dibayar',o.pay.status==='paid'?o.pay.method:'',pd?fmtDayS(pd)+' '+fmtTime(pd):'',otot(o)])}))
+    .concat([xrow(['Belum dibayar','','','','','','','',s.cOpen],'b'),xrow(['Sudah lunas','','','','','','','',s.cPaid],'b'),xrow(['Total kolektif','','','','','','','',s.cOpen+s.cPaid],'b')]);
   var xml='<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?>'+
     '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'+
     '<Styles><Style ss:ID="Default"><Font ss:FontName="Calibri" ss:Size="11"/></Style>'+
@@ -1144,7 +1186,7 @@ function exportExcel(){
     '<Style ss:ID="b"><Font ss:Bold="1"/><Interior ss:Color="#E2F2DF" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0"/></Style>'+
     '<Style ss:ID="n"><NumberFormat ss:Format="#,##0"/></Style></Styles>'+
     xsheet('Ringkasan',[260,120,120],sum)+xsheet('Rekap Harian',[150,70,100,100,100,110,100,100,120,110,130],dayRows)+
-    xsheet('Pengeluaran',[110,50,130,220,160,90,100],expRows)+
+    xsheet('Pengeluaran',[110,50,130,220,160,90,100],expRows)+xsheet('Kolektif',[60,110,50,110,320,100,80,140,100],colRows)+
     xsheet('Pembelian',[60,110,50,110,50,100,320,160,90,80,70,100],ordRows)+xsheet('Rincian Menu',[70,110,50,110,200,140,60,110,100,90],itRows)+'</Workbook>';
   var nm={today:'harian',day:'harian',['7d']:'mingguan',month:'bulanan',custom:'periode',all:'semua'}[k];
   var fn='laporan-'+D.shop.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')+'-'+nm+(k==='custom'?'-'+S.fdate.from.replace(/-/g,'')+'-sd-'+S.fdate.to.replace(/-/g,''):k==='day'?'-'+S.fdate.day.replace(/-/g,''):'')+'-'+now.getFullYear()+pad(now.getMonth()+1)+pad(now.getDate())+'.xls';
@@ -1210,9 +1252,16 @@ function viewKeuangan(){
   var expP='<div class="panel stack"><h3>Pengeluaran &amp; laba</h3><ul class="ul">'+
     pr('Pemasukan lunas',s.paid)+(xcats.length?xcats.map(function(c){return pr('− '+esc(c),R.xcat[c])}).join(''):'')+pr('Total pengeluaran',s.exp,true)+pr('Laba bersih',net,true)+'</ul>'+
     (s.nx?'':'<p class="hint">Belum ada pengeluaran pada periode ini. Catat di tab Pengeluaran.</p>')+'</div>';
-  var dayTbl='<div class="panel stack"><h3>Rekap per hari</h3><div class="tw"><table class="tbl"><thead><tr><th>Tanggal</th><th>Cash</th><th>QRIS</th><th>Transfer</th><th>Kolektif</th><th>Menunggu</th><th>Total</th><th>Pengeluaran</th></tr></thead><tbody>'+
-    R.days.map(function(g){return '<tr><td>'+esc(fmtDayS(g.d))+'</td><td class="num">'+rp(g.m.Cash)+'</td><td class="num">'+rp(g.m.QRIS)+'</td><td class="num">'+rp(g.m.Transfer)+'</td><td class="num">'+rp(g.coll)+'</td><td class="num">'+rp(g.waiting)+'</td><td class="num">'+rp(g.all)+'</td><td class="num">'+rp(g.exp)+'</td></tr>'}).join('')+
-    '</tbody><tfoot><tr><td>Total</td><td class="num">'+rp(R.meth.Cash||0)+'</td><td class="num">'+rp(R.meth.QRIS||0)+'</td><td class="num">'+rp(R.meth.Transfer||0)+'</td><td class="num">'+rp(s.coll)+'</td><td class="num">'+rp(s.waiting)+'</td><td class="num">'+rp(s.all)+'</td><td class="num">'+rp(s.exp)+'</td></tr></tfoot></table></div></div>';
+  var dayTbl='<div class="panel stack"><h3>Rekap per hari</h3><div class="tw"><table class="tbl"><thead><tr><th>Tanggal</th><th>Cash</th><th>QRIS</th><th>Transfer</th><th>Total lunas</th><th>Pengeluaran</th><th>Sisa bersih</th><th>Kolektif (belum)</th><th>Menunggu</th><th>Total penjualan</th></tr></thead><tbody>'+
+    R.days.map(function(g){return '<tr><td>'+esc(fmtDayS(g.d))+'</td><td class="num">'+rp(g.m.Cash)+'</td><td class="num">'+rp(g.m.QRIS)+'</td><td class="num">'+rp(g.m.Transfer)+'</td><td class="num">'+rp(g.paid)+'</td><td class="num">'+rp(g.exp)+'</td><td class="num '+(g.paid-g.exp<0?'neg':'pos')+'">'+rp(g.paid-g.exp)+'</td><td class="num">'+rp(g.coll)+'</td><td class="num">'+rp(g.waiting)+'</td><td class="num">'+rp(g.all)+'</td></tr>'}).join('')+
+    '</tbody><tfoot><tr><td>Total</td><td class="num">'+rp(R.meth.Cash||0)+'</td><td class="num">'+rp(R.meth.QRIS||0)+'</td><td class="num">'+rp(R.meth.Transfer||0)+'</td><td class="num">'+rp(s.paid)+'</td><td class="num">'+rp(s.exp)+'</td><td class="num '+(net<0?'neg':'pos')+'">'+rp(net)+'</td><td class="num">'+rp(s.coll)+'</td><td class="num">'+rp(s.waiting)+'</td><td class="num">'+rp(s.all)+'</td></tr></tfoot></table></div><p class="hint">Sisa bersih = total lunas (Cash + QRIS + Transfer, termasuk kolektif yang sudah dilunasi) dikurangi pengeluaran pada hari itu.</p></div>';
+  var collP='<div class="panel stack"><h3>Tabel Kolektif</h3><p class="hint">Pesanan kolektif ditagih bersama. Uangnya otomatis masuk ke pemasukan lunas begitu pesanan ditandai lunas lewat Cash, QRIS, atau Transfer.</p>'+
+    '<div class="stats"><div class="panel stat coll"><span>Kolektif belum dibayar</span><b class="num">'+rp(s.cOpen)+'</b><small>'+(s.cn-(R.coll.filter(function(o){return o.pay.status==='paid'}).length))+' pesanan</small></div>'+
+    '<div class="panel stat good"><span>Kolektif sudah lunas (masuk)</span><b class="num">'+rp(s.cPaid)+'</b><small>Cash '+short(R.cmeth.Cash)+' · QRIS '+short(R.cmeth.QRIS)+' · Transfer '+short(R.cmeth.Transfer)+'</small></div>'+
+    '<div class="panel stat"><span>Total kolektif</span><b class="num">'+rp(s.cOpen+s.cPaid)+'</b><small>'+s.cn+' pesanan</small></div></div>'+
+    (R.coll.length?'<div class="tw"><table class="tbl"><thead><tr><th>No</th><th class="l">Tanggal</th><th class="l">Pemesan</th><th class="l">Pesanan</th><th class="l">Status</th><th>Total</th></tr></thead><tbody>'+
+      R.coll.map(function(o){var d=new Date(o.ts),pd=o.pay.at?new Date(o.pay.at):null;return '<tr><td>'+num(o.no)+'</td><td class="l">'+esc(fmtDayS(d))+'<br>'+fmtTime(d)+'</td><td class="l">'+esc(o.customer||'-')+(o.table?' / Meja '+esc(o.table):'')+'</td><td class="l">'+esc(itemsText(o))+'</td><td class="l">'+(o.pay.status==='paid'?'<span class="pill paid">Lunas · '+esc(o.pay.method)+'</span>'+(pd?'<div class="hint">'+esc(fmtDayS(pd))+' '+fmtTime(pd)+'</div>':''):'<span class="pill collective">Belum dibayar</span>')+'</td><td class="num">'+rp(otot(o))+'</td></tr>'}).join('')+
+      '</tbody><tfoot><tr><td colspan="5">Total kolektif</td><td class="num">'+rp(s.cOpen+s.cPaid)+'</td></tr></tfoot></table></div>':'<p class="hint">Belum ada pesanan kolektif pada periode ini.</p>')+'</div>';
   var empty=!orders.length&&!R.exps.length;
   return '<div class="stack"><div class="rep-bar"><div class="chips">'+rg.map(function(x){return '<button class="chip" data-act="frange" data-v="'+x[0]+'" aria-pressed="'+(S.frange===x[0])+'">'+x[1]+'</button>'}).join('')+'</div>'+
     '<div class="rep-act"><button class="btn ghost" data-act="printrep">Cetak laporan</button><button class="btn xl-b" data-act="xlsrep">Unduh Excel</button></div></div>'+
@@ -1225,11 +1274,11 @@ function viewKeuangan(){
       '<div class="panel stat warn"><span>Menunggu bayar</span><b class="num">'+rp(s.waiting)+'</b><small>'+s.nw+' pesanan</small></div>'+
       '<div class="panel stat coll"><span>Kolektif</span><b class="num">'+rp(s.coll)+'</b><small>'+s.nc+' pesanan, ditagih bersama</small></div>'+
       '<div class="panel stat bad"><span>Pengeluaran</span><b class="num">'+rp(s.exp)+'</b><small>'+s.nx+' catatan</small></div>'+
-      '<div class="panel stat '+(net<0?'bad':'good')+'"><span>Laba bersih</span><b class="num">'+rp(net)+'</b><small>lunas dikurangi pengeluaran</small></div>'+
+      '<div class="panel stat '+(net<0?'bad':'good')+'"><span>Sisa uang bersih</span><b class="num">'+rp(net)+'</b><small>lunas dikurangi pengeluaran</small></div>'+
       '<div class="panel stat"><span>Total pesanan</span><b class="num">'+s.n+'</b><small>rata-rata lunas '+rp(avg)+'</small></div></div>'+
     '<div class="panel stack"><h3>Pemasukan 7 hari terakhir</h3>'+chart+'</div>'+
     (empty?'<div class="empty">Belum ada data pada periode ini. Pemasukan muncul setelah pesanan disimpan dan ditandai lunas; pengeluaran dicatat di tab Pengeluaran.</div>':
-    '<div class="two-col">'+pay+expP+'</div>'+dayTbl+
+    '<div class="two-col">'+pay+expP+'</div>'+dayTbl+collP+
     '<div class="panel stack"><h3>Menu terlaris</h3><div class="rank">'+
       trows.map(function(n){return '<div class="rk"><div class="rk-h"><span>'+esc(n)+'</span><span class="num">'+top[n].q+' porsi · '+rp(top[n].v)+'</span></div><div class="rk-b"><i style="width:'+(top[n].q/tx*100)+'%"></i></div></div>'}).join('')+'</div></div>')+
     '</div>';
@@ -1334,15 +1383,28 @@ var A={
   askpay:function(t){S.payingId=t.dataset.id;S.confirm=null;drawOrders()},
   paycancel:function(){S.payingId=null;drawOrders()},
   setpaid:function(t){var o=D.orders.filter(function(x){return x.id===t.dataset.id})[0];if(o){o.pay={status:'paid',method:t.dataset.v,at:new Date().toISOString()};save();S.payingId=null;drawOrders();toast(num(o.no)+' ditandai lunas ('+t.dataset.v+')')}},
-  unpay:function(t){if(!needOwner())return;var o=D.orders.filter(function(x){return x.id===t.dataset.id})[0];if(o){o.pay={status:'waiting'};save();drawOrders()}},
-  tocollective:function(t){var o=D.orders.filter(function(x){return x.id===t.dataset.id})[0];if(o){o.pay={status:'collective'};save();drawOrders();toast(num(o.no)+' dijadikan kolektif')}},
-  towaiting:function(t){var o=D.orders.filter(function(x){return x.id===t.dataset.id})[0];if(o){o.pay={status:'waiting'};save();drawOrders()}},
+  unpay:function(t){if(!needOwner())return;var o=D.orders.filter(function(x){return x.id===t.dataset.id})[0];if(o){o.pay=o.coll?{status:'collective'}:{status:'waiting'};save();drawOrders()}},
+  tocollective:function(t){var o=D.orders.filter(function(x){return x.id===t.dataset.id})[0];if(o){o.pay={status:'collective'};o.coll=true;save();drawOrders();toast(num(o.no)+' dijadikan kolektif')}},
+  towaiting:function(t){var o=D.orders.filter(function(x){return x.id===t.dataset.id})[0];if(o){o.pay={status:'waiting'};delete o.coll;save();drawOrders()}},
   adddraft:function(t){if(!needOwner())return;addDrafts(t.dataset.cat==='Minuman'?'Minuman':'Makanan',1);renderView()},
   rmdraft:function(t){if(!needOwner())return;S.drafts=S.drafts.filter(function(d){return d.id!==t.dataset.id});renderView()},
   delask:function(t){if(!needOwner())return;S.confirm='order:'+t.dataset.id;S.payingId=null;drawOrders()},
   delno:function(){S.confirm=null;renderView()},
   delyes:function(t){if(!needOwner())return;D.orders=D.orders.filter(function(x){return x.id!==t.dataset.id});save();S.confirm=null;drawOrders();toast('Pesanan dihapus')},
   printrc:function(t){printReceipt(t.dataset.id)},
+  eoopen:function(t){var o=D.orders.filter(function(x){return x.id===t.dataset.id})[0];if(!o||!canEdit(o))return;
+    S.eo={id:o.id,items:o.items.map(function(i){return {name:i.name,price:i.price,qty:i.qty,note:i.note||'',custom:!!i.custom}})};S.confirm=null;S.payingId=null;drawOrders()},
+  eocancel:function(){S.eo=null;drawOrders()},
+  eoinc:function(t){var i=S.eo&&S.eo.items[+t.dataset.i];if(i){i.qty++;drawOrders()}},
+  eodec:function(t){var i=S.eo&&S.eo.items[+t.dataset.i];if(i){i.qty--;if(i.qty<1)S.eo.items.splice(+t.dataset.i,1);drawOrders()}},
+  eodel:function(t){if(S.eo){S.eo.items.splice(+t.dataset.i,1);drawOrders()}},
+  eoadd:function(){var sel=$('eosel'),c=S.eo&&eoChoices()[sel?+sel.value:-1];if(!c)return;eoPut(c.name,c.price,1,false);drawOrders()},
+  eosave:function(){
+    var o=S.eo&&D.orders.filter(function(x){return x.id===S.eo.id})[0];if(!o||!canEdit(o))return;
+    if(!S.eo.items.length){toast('Pesanan minimal 1 item. Untuk membatalkan pesanan, gunakan Hapus.');return}
+    o.items=S.eo.items.map(function(i){return {name:i.name,price:i.price,qty:i.qty,note:String(i.note||'').trim(),custom:i.custom}});
+    o.edited=new Date().toISOString();save();S.eo=null;drawOrders();toast('Pesanan '+num(o.no)+' diubah, total '+rp(otot(o)));
+  },
   lastx:function(){S.last=null;if(S.view==='kasir')drawCart()},
   closeask:function(){if(!needOwner())return;S.confirm='close';renderView()},
   closeyes:function(){
@@ -1397,6 +1459,7 @@ document.addEventListener('input',function(e){
   else if(f==='sort'){S.sort=t.value;drawGrid()}
   else if(f==='mq'){S.mq=t.value;drawMenuGrid()}
   else if(f==='oq'){S.of.q=t.value;drawOrders()}
+  else if(f==='eonote'){var eit=S.eo&&S.eo.items[+t.dataset.i];if(eit)eit.note=t.value}
   else if(f==='draft'){var d=S.drafts.filter(function(x){return x.id===t.dataset.d})[0];if(d)d[t.dataset.fld]=t.value}
 });
 document.addEventListener('change',function(e){
@@ -1440,6 +1503,12 @@ document.addEventListener('submit',async function(e){
     else if(bp.length<6)S.msg.bind={t:'Sandi minimal 6 karakter.',ok:false};
     else try{await window.KasirAuth.create(be,bp);me.email=be;me.username=be;delete me.pw;if(me.role==='owner')D.showHint=false;save();S.msg.bind={t:'Berhasil. Mulai sekarang login memakai email '+be+'.',ok:true}}catch(err){S.msg.bind={t:err.message,ok:false}}
     render();return;
+  }
+  if(kind==='eocustom'){
+    var en=String(fd.get('name')||'').trim(),ep=parsePrice(fd.get('price')),eq=parsePrice(fd.get('qty'));
+    if(!S.eo)return;
+    if(!en||ep<=0||eq<1){toast('Isi nama, harga, dan jumlah dengan benar.');return}
+    eoPut(en,ep,eq,true);drawOrders();return;
   }
   if(kind==='custom'){
     var name=String(fd.get('name')||'').trim(),price=parsePrice(fd.get('price')),qty=parsePrice(fd.get('qty'));
