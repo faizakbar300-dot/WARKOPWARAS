@@ -854,12 +854,23 @@ function saveOrder(status){
 /* ---------- struk (bon kecil) ---------- */
 function ps(css){var el=document.getElementById('pagestyle');if(!el){el=document.createElement('style');el.id='pagestyle';document.head.appendChild(el)}el.textContent=css}
 window.addEventListener('afterprint',function(){ps('');var pa=$('printarea');if(pa)pa.className=''});
+function byName(o){
+  var k=String(o.by||'').toLowerCase();
+  var u=D.users.filter(function(x){return (x.username||'').toLowerCase()===k||(x.email||'').toLowerCase()===k})[0];
+  if(u&&u.name)return u.name;
+  return k.indexOf('@')>0?k.split('@')[0]:(o.by||'');
+}
+var RC_CSS="@page{size:__W__ auto;margin:3mm}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;color:#000}"+
+  "body{width:__C__;font:12px/1.35 'Courier New',Courier,monospace;-webkit-print-color-adjust:exact;print-color-adjust:exact;-webkit-text-size-adjust:100%}"+
+  ".rc-c{text-align:center}.rc-shop{font-weight:700;font-size:16px}.rc-hr{border-top:1px dashed #000;margin:6px 0}"+
+  ".rc-row{display:flex;justify-content:space-between;gap:6px}.rc-row span:first-child{min-width:0;overflow-wrap:anywhere}.rc-row span:last-child{text-align:right;white-space:nowrap}"+
+  ".rc-b{font-weight:700}.rc-n{font-size:11px;padding-left:8px}div{overflow-wrap:anywhere}";
 function n3(n){return Math.round(n).toLocaleString('id-ID')}
 function receiptHTML(o){
   var d=new Date(o.ts),paid=o.pay.status==='paid',t=otot(o),rc=D.receipt||rcDef();
   var dt=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()),tm=pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
   var h='<div class="rc-c rc-shop">'+esc(D.shop)+'</div>'+(rc.addr?'<div class="rc-c">'+esc(rc.addr).replace(/\n/g,'<br>')+'</div>':'')+(rc.tel?'<div class="rc-c">Telp. '+esc(rc.tel)+'</div>':'')+
-    '<div class="rc-hr"></div><div class="rc-row"><span>'+dt+'</span><span>'+esc(o.customer||'')+'</span></div><div class="rc-row"><span>'+tm+'</span><span>'+esc(o.by||'')+'</span></div>'+
+    '<div class="rc-hr"></div><div class="rc-row"><span>'+dt+'</span><span>'+esc(o.customer||'')+'</span></div><div class="rc-row"><span>'+tm+'</span><span>'+esc(byName(o))+'</span></div>'+
     '<div class="rc-row"><span>No.'+num(o.no)+'</span><span>'+(o.table?'Meja '+esc(o.table):'')+'</span></div>'+(o.svc?'<div>'+esc(o.svc)+'</div>':'')+'<div class="rc-hr"></div>';
   o.items.forEach(function(i){h+='<div>'+esc(i.name)+'</div><div class="rc-row"><span>'+i.qty+' X '+n3(i.price)+'</span><span>Rp '+n3(i.price*i.qty)+'</span></div>'+(i.note?'<div class="rc-n">* '+esc(i.note)+'</div>':'')});
   h+='<div class="rc-hr"></div><div class="rc-row"><span>Sub Total</span><span>'+n3(t)+'</span></div><div class="rc-row rc-b"><span>Total</span><span>'+n3(t)+'</span></div>';
@@ -872,10 +883,18 @@ function receiptHTML(o){
 function printReceipt(id){
   var o=D.orders.filter(function(x){return x.id===id})[0];
   if(!o||(!isOwner()&&o.closed)){toast('Pesanan tidak ditemukan.');return}
-  var w=(D.receipt&&D.receipt.paper==='80')?'80mm':'58mm',pa=$('printarea');
-  pa.className='rcpt';pa.innerHTML=receiptHTML(o);
-  ps('@page{size:'+w+' auto;margin:3mm}');
-  setTimeout(function(){try{window.print()}catch(e){toast('Cetak tidak tersedia di peramban ini.')}},60);
+  var big=D.receipt&&D.receipt.paper==='80',w=big?'80mm':'58mm',c=big?'74mm':'52mm';
+  var css=RC_CSS.replace('__W__',w).replace('__C__',c);
+  var doc='<!doctype html><html lang="id"><head><meta charset="utf-8"><title>Struk '+num(o.no)+'</title><style>'+css+'</style></head><body>'+receiptHTML(o)+'</body></html>';
+  var old=document.getElementById('rcframe');if(old)old.remove();
+  var f=document.createElement('iframe');f.id='rcframe';f.setAttribute('aria-hidden','true');
+  f.style.cssText='position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+  document.body.appendChild(f);
+  var d=f.contentWindow.document;d.open();d.write(doc);d.close();
+  setTimeout(function(){
+    try{f.contentWindow.focus();f.contentWindow.print()}catch(e){toast('Cetak tidak tersedia di peramban ini.')}
+    setTimeout(function(){if(f.parentNode)f.remove()},60000);
+  },250);
 }
 function lastBox(){
   var o=S.last&&D.orders.filter(function(x){return x.id===S.last})[0];if(!o)return '';
