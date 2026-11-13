@@ -946,7 +946,8 @@ function drawOrders(){
   s.textContent=list.length+' pesanan'+(un?' · belum lunas '+rp(un):'');
   l.innerHTML=list.length?list.map(orderCard).join(''):'<div class="empty" style="grid-column:1/-1">Belum ada pesanan pada pilihan ini. Buat pesanan baru di tab Kasir.</div>';
 }
-function canEdit(o){return isOwner()||o.pay.status!=='paid'}
+function canEdit(o){return true}
+function canEditItems(o){return isOwner()||o.pay.status!=='paid'}
 function isColl(o){return !!o.coll||o.pay.status==='collective'}
 function eoChoices(){var L=[];D.menu.forEach(function(m){if(!m.active)return;if(m.variants)m.variants.forEach(function(v){L.push({name:m.name+' ('+v.label+')',price:v.price})});else L.push({name:m.name,price:m.price})});return L}
 function eoTotal(){return S.eo.items.reduce(function(t,i){return t+i.price*i.qty},0)}
@@ -963,7 +964,10 @@ function editCard(o,d){
       '<div class="acts"><button type="button" class="btn ghost sm danger-t" data-act="eodel" data-i="'+x+'">Hapus item</button></div></li>';
   }).join('');
   return '<article class="panel oc"><div class="oc-h"><div><b>Ubah pesanan '+num(o.no)+'</b> <span class="muted">'+(o.customer?'· '+esc(o.customer):'')+(o.table?' · Meja '+esc(o.table):'')+'</span><div class="oc-t">'+fmtDay(d)+' · pukul '+fmtTime(d)+'</div></div></div>'+
-    (o.pay.status==='paid'?'<div class="onote">Pesanan ini sudah lunas. Total baru akan mengubah pemasukan di laporan.</div>':'')+
+    (o.pay.status==='paid'&&!E.lock?'<div class="onote">Pesanan ini sudah lunas. Total baru akan mengubah pemasukan di laporan.</div>':'')+
+    '<div class="two"><label class="f">Nama pemesan<input class="inp sm" data-f="eocust" value="'+esc(E.customer)+'" placeholder="Nama pelanggan" autocomplete="off"></label>'+
+    '<label class="f">No. meja<input class="inp sm" data-f="eotable" value="'+esc(E.table)+'" placeholder="mis. 5" autocomplete="off"></label></div>'+
+    (E.lock?'<div class="onote">Pesanan lunas: kasir hanya dapat mengubah nama dan no. meja. Item hanya dapat diubah pemilik.</div><ul class="cl">'+E.items.map(function(i){return '<li class="ci"><div class="ci-top"><span class="ci-name">'+i.qty+'× '+esc(i.name)+'</span><span class="num">'+rp(i.price*i.qty)+'</span></div></li>'}).join('')+'</ul><div class="total"><span>Total</span><b class="num">'+rp(eoTotal())+'</b></div>':
     '<ul class="cl">'+(rows||'<li class="hint">Belum ada item. Tambahkan menu di bawah.</li>')+'</ul>'+
     '<div class="cform"><label class="f" for="eosel">Tambah menu<select class="inp sm" id="eosel">'+ch.map(function(c,i){return '<option value="'+i+'">'+esc(c.name)+' — '+rp(c.price)+'</option>'}).join('')+'</select></label>'+
     '<button type="button" class="btn sm" data-act="eoadd"'+(ch.length?'':' disabled')+'>+ Tambah ke pesanan</button></div>'+
@@ -971,7 +975,7 @@ function editCard(o,d){
     '<label class="f">Nama<input class="inp sm" name="name" placeholder="mis. Telur ceplok" required></label>'+
     '<div class="two"><label class="f">Harga (Rp)<input class="inp sm" name="price" inputmode="numeric" required></label><label class="f">Jumlah<input class="inp sm" name="qty" inputmode="numeric" value="1" required></label></div>'+
     '<button class="btn ghost sm" type="submit">Tambah</button></form>'+
-    '<div class="total"><span>Total baru</span><b class="num">'+rp(eoTotal())+'</b></div>'+
+    '<div class="total"><span>Total baru</span><b class="num">'+rp(eoTotal())+'</b></div>')+
     '<div class="acts"><button class="btn sm" data-act="eosave">Simpan perubahan</button><button class="btn ghost sm" data-act="eocancel">Batal</button></div></article>';
 }
 function orderCard(o){
@@ -989,7 +993,7 @@ function orderCard(o){
       ?'<span class="hint">Hapus pesanan ini?</span><button class="btn danger sm" data-act="delyes" data-id="'+o.id+'">Ya, hapus</button><button class="btn ghost sm" data-act="delno">Batal</button>'
       :'<button class="btn ghost sm danger-t" data-act="delask" data-id="'+o.id+'">Hapus</button>';
   }
-  act=(canEdit(o)?'<button class="btn ghost sm" data-act="eoopen" data-id="'+o.id+'">Ubah pesanan</button>':'')+'<button class="btn ghost sm" data-act="printrc" data-id="'+o.id+'">Cetak struk</button>'+act;
+  act=(canEdit(o)?'<button class="btn ghost sm" data-act="eoopen" data-id="'+o.id+'">'+(canEditItems(o)?'Ubah pesanan':'Ubah nama/meja')+'</button>':'')+'<button class="btn ghost sm" data-act="printrc" data-id="'+o.id+'">Cetak struk</button>'+act;
   return '<article class="panel oc"><div class="oc-h"><div><b>'+num(o.no)+'</b> <span class="muted">'+(o.table?'· Meja '+esc(o.table):'')+(o.customer?' · '+esc(o.customer):'')+'</span>'+(o.sample?'<span class="tag">contoh</span>':'')+(o.edited?'<span class="tag">diubah</span>':'')+(isOwner()&&o.closed?'<span class="tag">buku ditutup</span>':'')+
     '<div class="oc-t">'+fmtDay(d)+' · pukul '+fmtTime(d)+(o.svc?' · '+esc(o.svc):'')+'</div></div>'+
     '<span class="pill '+o.pay.status+'">'+(paid?'Lunas · '+esc(o.pay.method):ST[o.pay.status])+'</span></div>'+
@@ -1270,12 +1274,14 @@ function viewKeuangan(){
       '<div class="acts"><button class="btn ghost sm" data-act="fquick" data-v="thismonth">Bulan ini</button><button class="btn ghost sm" data-act="fquick" data-v="lastmonth">Bulan lalu</button></div></div>':'')+
     '<p class="hint">Cetak dan Excel mengikuti periode yang dipilih: '+esc(rangeLabel(S.frange))+'. Isinya ringkasan keuangan, rekap pembayaran per hari (Cash, QRIS, Transfer, Kolektif), pengeluaran, dan daftar semua pembelian.</p>'+
     '<div class="stats">'+
-      '<div class="panel stat good"><span>Pemasukan (lunas)</span><b class="num">'+rp(s.paid)+'</b><small>'+s.np+' pesanan lunas</small></div>'+
-      '<div class="panel stat warn"><span>Menunggu bayar</span><b class="num">'+rp(s.waiting)+'</b><small>'+s.nw+' pesanan</small></div>'+
-      '<div class="panel stat coll"><span>Kolektif</span><b class="num">'+rp(s.coll)+'</b><small>'+s.nc+' pesanan, ditagih bersama</small></div>'+
+      '<div class="panel stat"><span>Total penjualan</span><b class="num">'+rp(s.all)+'</b><small>'+s.n+' pesanan, rata-rata lunas '+rp(avg)+'</small></div>'+
+      '<div class="panel stat good"><span>QRIS</span><b class="num">'+rp(R.meth.QRIS||0)+'</b><small>pembayaran lunas via QRIS</small></div>'+
+      '<div class="panel stat good"><span>Transfer</span><b class="num">'+rp(R.meth.Transfer||0)+'</b><small>pembayaran lunas via transfer</small></div>'+
+      '<div class="panel stat good"><span>Cash</span><b class="num">'+rp(R.meth.Cash||0)+'</b><small>total lunas '+rp(s.paid)+' ('+s.np+' pesanan)</small></div>'+
       '<div class="panel stat bad"><span>Pengeluaran</span><b class="num">'+rp(s.exp)+'</b><small>'+s.nx+' catatan</small></div>'+
-      '<div class="panel stat '+(net<0?'bad':'good')+'"><span>Sisa uang bersih</span><b class="num">'+rp(net)+'</b><small>lunas dikurangi pengeluaran</small></div>'+
-      '<div class="panel stat"><span>Total pesanan</span><b class="num">'+s.n+'</b><small>rata-rata lunas '+rp(avg)+'</small></div></div>'+
+      '<div class="panel stat '+(net<0?'bad':'good')+'"><span>Sisa bersih</span><b class="num">'+rp(net)+'</b><small>lunas dikurangi pengeluaran</small></div>'+
+      '<div class="panel stat coll"><span>Kolektif</span><b class="num">'+rp(s.coll)+'</b><small>'+s.nc+' pesanan, ditagih bersama</small></div>'+
+      '<div class="panel stat warn"><span>Menunggu</span><b class="num">'+rp(s.waiting)+'</b><small>'+s.nw+' pesanan</small></div></div>'+
     '<div class="panel stack"><h3>Pemasukan 7 hari terakhir</h3>'+chart+'</div>'+
     (empty?'<div class="empty">Belum ada data pada periode ini. Pemasukan muncul setelah pesanan disimpan dan ditandai lunas; pengeluaran dicatat di tab Pengeluaran.</div>':
     '<div class="two-col">'+pay+expP+'</div>'+dayTbl+collP+
@@ -1393,7 +1399,7 @@ var A={
   delyes:function(t){if(!needOwner())return;D.orders=D.orders.filter(function(x){return x.id!==t.dataset.id});save();S.confirm=null;drawOrders();toast('Pesanan dihapus')},
   printrc:function(t){printReceipt(t.dataset.id)},
   eoopen:function(t){var o=D.orders.filter(function(x){return x.id===t.dataset.id})[0];if(!o||!canEdit(o))return;
-    S.eo={id:o.id,items:o.items.map(function(i){return {name:i.name,price:i.price,qty:i.qty,note:i.note||'',custom:!!i.custom}})};S.confirm=null;S.payingId=null;drawOrders()},
+    S.eo={id:o.id,customer:o.customer||'',table:o.table||'',lock:!canEditItems(o),items:o.items.map(function(i){return {name:i.name,price:i.price,qty:i.qty,note:i.note||'',custom:!!i.custom}})};S.confirm=null;S.payingId=null;drawOrders()},
   eocancel:function(){S.eo=null;drawOrders()},
   eoinc:function(t){var i=S.eo&&S.eo.items[+t.dataset.i];if(i){i.qty++;drawOrders()}},
   eodec:function(t){var i=S.eo&&S.eo.items[+t.dataset.i];if(i){i.qty--;if(i.qty<1)S.eo.items.splice(+t.dataset.i,1);drawOrders()}},
@@ -1401,8 +1407,9 @@ var A={
   eoadd:function(){var sel=$('eosel'),c=S.eo&&eoChoices()[sel?+sel.value:-1];if(!c)return;eoPut(c.name,c.price,1,false);drawOrders()},
   eosave:function(){
     var o=S.eo&&D.orders.filter(function(x){return x.id===S.eo.id})[0];if(!o||!canEdit(o))return;
-    if(!S.eo.items.length){toast('Pesanan minimal 1 item. Untuk membatalkan pesanan, gunakan Hapus.');return}
-    o.items=S.eo.items.map(function(i){return {name:i.name,price:i.price,qty:i.qty,note:String(i.note||'').trim(),custom:i.custom}});
+    if(!S.eo.lock&&!S.eo.items.length){toast('Pesanan minimal 1 item. Untuk membatalkan pesanan, gunakan Hapus.');return}
+    if(!S.eo.lock)o.items=S.eo.items.map(function(i){return {name:i.name,price:i.price,qty:i.qty,note:String(i.note||'').trim(),custom:i.custom}});
+    o.customer=String(S.eo.customer||'').trim();o.table=String(S.eo.table||'').trim();
     o.edited=new Date().toISOString();save();S.eo=null;drawOrders();toast('Pesanan '+num(o.no)+' diubah, total '+rp(otot(o)));
   },
   lastx:function(){S.last=null;if(S.view==='kasir')drawCart()},
@@ -1459,6 +1466,8 @@ document.addEventListener('input',function(e){
   else if(f==='sort'){S.sort=t.value;drawGrid()}
   else if(f==='mq'){S.mq=t.value;drawMenuGrid()}
   else if(f==='oq'){S.of.q=t.value;drawOrders()}
+  else if(f==='eocust'){if(S.eo)S.eo.customer=t.value}
+  else if(f==='eotable'){if(S.eo)S.eo.table=t.value}
   else if(f==='eonote'){var eit=S.eo&&S.eo.items[+t.dataset.i];if(eit)eit.note=t.value}
   else if(f==='draft'){var d=S.drafts.filter(function(x){return x.id===t.dataset.d})[0];if(d)d[t.dataset.fld]=t.value}
 });
